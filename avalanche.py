@@ -7,9 +7,10 @@ __version__   = "2.7.7"
 
 import logging
 import time
-import subprocess
 import os
 import re
+from tempfile import mkstemp
+from shutil import move
 
 #define some logging
 log_file = __file__.split('.')[0].split('/')[-1] + '.log'
@@ -20,16 +21,21 @@ class Avalanche():
     Spirent Avalanche traffic generator library
     
     args = {
-                arg: description
+                avalanche_path: filepath to work with Avalanche config files
+                avalanche_config_filename: Avalanche config.tcl test filename
 
-            } 
+            }
+
+    Class assumes TCL config file has already been built out 
     """
 
-    def __init__(self, avalanche_path="C:\AvalancheExeDir"):
+    def __init__(self, avalanche_path="C:\AvalancheExeDir", avalanche_config_filename="config.tcl"):
         """
         Class initialization
         """
         self.avalanche_path = avalanche_path
+        self.avalanche_config_file = avalanche_config_filename
+
     def start(self):
         """
         Starts Avalanche TCL test case
@@ -55,18 +61,69 @@ class Avalanche():
         """
         Generates TCL script from an Avalanche test via test.tcl
         """
-    def force_reserve_ports(self):
+    def force_reserve_ports(self, force_reserve=True):
         """
         Modifies the Avalanche TCL script to fore reserve the ports
+
+        args = {
+                    force_reserve: if 'True', set the ReserveForce bit to 1 (default) and force reserve the Avalanche ports, else set bit to 0 to not force reserve
+                }
         """
-    def force_release_ports(self):
-        """
-        Force releases Avalanche ports
-        """
+        #define file
+        config_file = self.avalanche_path + "\\" + self.avalanche_config_file
+        #create a temporary file
+        fh, temp_file = mkstemp()
+        #set ReserveForce to 1 in config file
+        if force_reserve:
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    for line in old_file:
+                        if "ReserveForce" in line:
+                            new_file.write(re.sub('\d', '1', line))
+                            logging.info("FILE: {0};ReserveForce: True".format(config_file))
+                        else:
+                            new_file.write(line)
+
+        #set ReserveForce to 0 in config file
+        else:
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #set all the configrations to 
+                    for line in old_file:
+                        if "ReserveForce" in line:
+                            new_file.write(re.sub('\d', '0', line))
+                            logging.info("FILE: {0};ReserveForce: False".format(config_file))
+                        else:
+                            new_file.write(line)
+        #close and move file                    
+        os.close(fh) 
+        move(temp_file, config_file)
     def set_license_file(self):
         """
         Modifies the Avalanche TCL script to set the license file
         """
+                #define file
+        config_file = self.avalanche_path + "/" + self.avalanche_config_file
+        #create a temporary file
+        fh, temp_file = mkstemp()
+        #set ReserveForce to 1 in config file
+        if force_reserve:
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #set all the configrations to 
+                    for line in old_file:
+                        if "ReserveForce" in line:
+                            new_file.write(re.sub('\d', '1', line))
+                            # new_file.write(line)
+                            # line = old_file.next()
+                            # new_file.write(re.sub('{.*?}', "{true}", line))
+                        else:
+                            new_file.write(line)
+                        close(fh) 
+
     def set_output_dir(self):
         """
         Modifies the Avalanche TCL script to set the results output directory
@@ -116,4 +173,5 @@ if __name__ == '__main__':
     ###########################################
 
     instance = Avalanche()
-    instance.start()
+    instance.force_reserve_ports()
+    #instance.start()
