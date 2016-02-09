@@ -85,7 +85,7 @@ class Avalanche():
                 for line in old_file:
                     if re.search('ReserveForce\s+\d', line):
                         new_file.write(re.sub('\d', str(reserve_force_bit), line))
-                        logging.info("FILE: {0};ReserveForce: True".format(config_file))
+                        logging.info("FILE: {0};ReserveForce: True".format(config_file.replace('\\', '/')))
                     else:
                         new_file.write(line)
         #close and move file                    
@@ -106,6 +106,7 @@ class Avalanche():
                 for line in old_file:
                     if re.search('License\s+{', line):
                         new_file.write(re.sub('{.*?}', "{%s}", line) % lic_file)
+                        logging.info('License: {0}'.format(lic_file))
                     else:
                         new_file.write(line)
 
@@ -138,16 +139,71 @@ class Avalanche():
                 for line in old_file:
                     if re.search('OutputDir\s+{', line):
                         new_file.write(re.sub('{.*?}', "{%s}", line) % output_dir)
+                        logging.info('Output Directory: {0}'.format(output_dir))
                     else:
                         new_file.write(line)
 
         #close and move file                    
         os.close(fh) 
         move(temp_file, config_file) 
-    def set_associations(self):
+    def set_associations(self, associations="all"):
         """
         Modifies the Avalanche TCL script to enables/disable Avalanche associations
+
+        args = {
+                    associations: the associaitions to enable [all|list of subnet names]
+                }
+
+        Sets both userBasedAssociations and globalAssociations for now...
         """
+
+        #define config file
+        config_file = self.avalanche_abs_config_file
+        #create a temporary file
+        fh, temp_file = mkstemp()
+
+        if associations == "all":
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #enable all associations both userBased and global associations
+                    for line in old_file:
+                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
+                            new_file.write(re.sub('{.*?}', "{true}", line))
+                        else:
+                            new_file.write(line)
+                    logging.info("Associations enabled: {0}".format(assocations.lower()))
+        else:
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #disable all associations both userBased and global associations
+                    for line in old_file:
+                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
+                            new_file.write(re.sub('{.*?}', "{false}", line))
+                        else:
+                            new_file.write(line)
+            for association in association_list:
+                print association
+                #open config file, make modifications, write to new file
+                with open(temp_file, 'w') as new_file:
+                    with open(config_file) as old_file:
+                        #enable associations in list both userBased and global associations
+                            for line in old_file:
+                                if re.search('.clientSubnet\s+{%s}' % association, line):
+                                    new_file.write(line)
+                                    print line
+                                    line = old_file.next()
+                                    print line
+                                    new_file.write(re.sub('{.*?}', "{junk}", line))
+                                else:
+                                    new_file.write(line)
+            logging.info("Associations enabled: {0}".format(associations))
+
+        #close and move file                    
+        os.close(fh) 
+        move(temp_file, config_file) 
+
     def set_runtime(self):
         """
         Modifies the Avalanche TCL script to set the Avalanche run time properties
@@ -191,9 +247,12 @@ if __name__ == '__main__':
     #initialize some example variables
     license_file = "C100_Lic"
     output_dir = "C:/AvalancheExeDir"
+    association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
+    #association_list = ["OctalOLT_Node1_Slot4"]
 
     instance = Avalanche()
     instance.force_reserve_ports(True)
     instance.set_license_file(license_file)
     instance.set_output_dir()
+    instance.set_associations(association_list)
     #instance.start()

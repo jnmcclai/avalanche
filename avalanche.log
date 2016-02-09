@@ -1,1 +1,4 @@
-2016-02-09 14:24:30,016 FILE: C:\AvalancheExeDir\config.tcl;ReserveForce: True
+2016-02-09 16:08:59,510 FILE: C:/AvalancheExeDir/config.tcl;ReserveForce: True
+2016-02-09 16:08:59,523 License: C100_Lic
+2016-02-09 16:08:59,536 Output Directory: C:/AvalancheExeDir
+2016-02-09 16:08:59,594 Associations enabled: ['OctalOLT_Node1_Slot3', 'OctalOLT_Node1_Slot4']
