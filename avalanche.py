@@ -34,7 +34,8 @@ class Avalanche():
         Class initialization
         """
         self.avalanche_path = avalanche_path
-        self.avalanche_config_file = avalanche_config_filename
+        self.avalanche_config_filename = avalanche_config_filename
+        self.avalanche_abs_config_file = self.avalanche_path + "\\" + self.avalanche_config_filename
 
     def start(self):
         """
@@ -70,64 +71,79 @@ class Avalanche():
                 }
         """
         #define file
-        config_file = self.avalanche_path + "\\" + self.avalanche_config_file
+        config_file = self.avalanche_abs_config_file
         #create a temporary file
         fh, temp_file = mkstemp()
         #set ReserveForce to 1 in config file
         if force_reserve:
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    for line in old_file:
-                        if "ReserveForce" in line:
-                            new_file.write(re.sub('\d', '1', line))
-                            logging.info("FILE: {0};ReserveForce: True".format(config_file))
-                        else:
-                            new_file.write(line)
-
-        #set ReserveForce to 0 in config file
+            reserve_force_bit = '1'
         else:
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    #set all the configrations to 
-                    for line in old_file:
-                        if "ReserveForce" in line:
-                            new_file.write(re.sub('\d', '0', line))
-                            logging.info("FILE: {0};ReserveForce: False".format(config_file))
-                        else:
-                            new_file.write(line)
+            reserve_force_bit = '0'
+        #open config file, make modifications, write to new file
+        with open(temp_file, 'w') as new_file:
+            with open(config_file) as old_file:
+                for line in old_file:
+                    if re.search('ReserveForce\s+\d', line):
+                        new_file.write(re.sub('\d', str(reserve_force_bit), line))
+                        logging.info("FILE: {0};ReserveForce: True".format(config_file))
+                    else:
+                        new_file.write(line)
         #close and move file                    
         os.close(fh) 
         move(temp_file, config_file)
-    def set_license_file(self):
+    def set_license_file(self, lic_file):
         """
         Modifies the Avalanche TCL script to set the license file
         """
-                #define file
-        config_file = self.avalanche_path + "/" + self.avalanche_config_file
+        #define config file
+        config_file = self.avalanche_abs_config_file
         #create a temporary file
         fh, temp_file = mkstemp()
-        #set ReserveForce to 1 in config file
-        if force_reserve:
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    #set all the configrations to 
-                    for line in old_file:
-                        if "ReserveForce" in line:
-                            new_file.write(re.sub('\d', '1', line))
-                            # new_file.write(line)
-                            # line = old_file.next()
-                            # new_file.write(re.sub('{.*?}', "{true}", line))
-                        else:
-                            new_file.write(line)
-                        close(fh) 
+        #open config file, make modifications, write to new file
+        with open(temp_file, 'w') as new_file:
+            with open(config_file) as old_file:
+                #set all the configrations to 
+                for line in old_file:
+                    if re.search('License\s+{', line):
+                        new_file.write(re.sub('{.*?}', "{%s}", line) % lic_file)
+                    else:
+                        new_file.write(line)
 
-    def set_output_dir(self):
+        #close and move file                    
+        os.close(fh) 
+        move(temp_file, config_file) 
+
+    def set_output_dir(self, output_dir=None):
         """
         Modifies the Avalanche TCL script to set the results output directory
+
+        args = {
+                    output_dir: the desired Avalanche results output directory
+                }
         """
+        #allow for output_dir to default to avalanche_path
+        if output_dir:
+            output_dir = output_dir
+        else:
+            output_dir = self.avalanche_path.replace('\\', '/')
+
+        #define config file
+        config_file = self.avalanche_abs_config_file
+        #create a temporary file
+        fh, temp_file = mkstemp()
+        #open config file, make modifications, write to new file
+        with open(temp_file, 'w') as new_file:
+            with open(config_file) as old_file:
+                #set all the configrations to 
+                for line in old_file:
+                    if re.search('OutputDir\s+{', line):
+                        new_file.write(re.sub('{.*?}', "{%s}", line) % output_dir)
+                    else:
+                        new_file.write(line)
+
+        #close and move file                    
+        os.close(fh) 
+        move(temp_file, config_file) 
     def set_associations(self):
         """
         Modifies the Avalanche TCL script to enables/disable Avalanche associations
@@ -172,6 +188,12 @@ if __name__ == '__main__':
     #EXAMPLES
     ###########################################
 
+    #initialize some example variables
+    license_file = "C100_Lic"
+    output_dir = "C:/AvalancheExeDir"
+
     instance = Avalanche()
-    instance.force_reserve_ports()
+    instance.force_reserve_ports(True)
+    instance.set_license_file(license_file)
+    instance.set_output_dir()
     #instance.start()
