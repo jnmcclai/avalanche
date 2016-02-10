@@ -9,8 +9,9 @@ import logging
 import time
 import os
 import re
+import shutil
 from tempfile import mkstemp
-from shutil import move
+
 
 #define some logging
 log_file = __file__.split('.')[0].split('/')[-1] + '.log'
@@ -90,7 +91,7 @@ class Avalanche():
                         new_file.write(line)
         #close and move file                    
         os.close(fh) 
-        move(temp_file, config_file)
+        shutil.move(temp_file, config_file)
     def set_license_file(self, lic_file):
         """
         Modifies the Avalanche TCL script to set the license file
@@ -112,7 +113,7 @@ class Avalanche():
 
         #close and move file                    
         os.close(fh) 
-        move(temp_file, config_file) 
+        shutil.move(temp_file, config_file) 
 
     def set_output_dir(self, output_dir=None):
         """
@@ -145,7 +146,7 @@ class Avalanche():
 
         #close and move file                    
         os.close(fh) 
-        move(temp_file, config_file) 
+        shutil.move(temp_file, config_file) 
     def set_associations(self, associations="all"):
         """
         Modifies the Avalanche TCL script to enables/disable Avalanche associations
@@ -186,7 +187,7 @@ class Avalanche():
 
             #close and move file                    
             os.close(fh) 
-            move(temp_file, config_file) 
+            shutil.move(temp_file, config_file) 
 
             for association in association_list:
                 print association
@@ -208,20 +209,77 @@ class Avalanche():
                                     new_file.write(line)
                 #close and move file                    
                 os.close(fh) 
-                move(temp_file, config_file) 
+                shutil.move(temp_file, config_file) 
 
             #log list of associations to be deleted
             logging.info("Associations enabled: {0}".format(associations))
 
-
-
-
-    def set_runtime(self):
+    def set_runtime(self, associations="all", param="soak"):
         """
         Modifies the Avalanche TCL script to set the Avalanche run time properties
 
+        args = {
+                    param: the runtime parameter to adjust [Soak|RampUp|RampDown]
+                }
+
         Allow to change RampUp, Steady Time, RampDown time via arguments with defaults
         """
+                #define config file
+        config_file = self.avalanche_abs_config_file
+        #create a temporary file
+        fh, temp_file = mkstemp()
+
+        if associations == "all":
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #enable all associations both userBased and global associations
+                    for line in old_file:
+                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
+                            new_file.write(re.sub('{.*?}', "{true}", line))
+                        else:
+                            new_file.write(line)
+                    logging.info("Associations enabled: {0}".format(assocations.lower()))
+        else:
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #disable all associations both userBased and global associations
+                    for line in old_file:
+                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
+                            new_file.write(re.sub('{.*?}', "{false}", line))
+                        else:
+                            new_file.write(line)
+
+            #close and move file                    
+            os.close(fh) 
+            shutil.move(temp_file, config_file) 
+
+            for association in association_list:
+                print association
+                #create a temporary file
+                fh, temp_file = mkstemp()
+                #open config file, make modifications, write to new file
+                with open(temp_file, 'w') as new_file:
+                    with open(config_file) as old_file:
+                        #enable associations in list both userBased and global associations
+                            for line in old_file:
+                                if re.search('.clientSubnet\s+{%s}' % association, line):
+                                    #write .clientSubnet line to file
+                                    new_file.write(line)
+                                    #skip to next line
+                                    line = old_file.next()
+                                    #use regex sub to enable association
+                                    new_file.write(re.sub('{.*?}', "{true}", line))
+                                else:
+                                    new_file.write(line)
+                #close and move file                    
+                os.close(fh) 
+                shutil.move(temp_file, config_file) 
+
+            #log list of associations to be deleted
+            logging.info("Associations enabled: {0}".format(associations))
+
     def analyze_results(self):
         """
         Analyze the Avalanche test results
@@ -242,10 +300,64 @@ class Avalanche():
         """
         Publish Avalanche test results to database
         """
-    def get_config_files(self):
+    def get_config_files(self, testbed, avalanche_test_name, repo_dir="C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche", license_dir="C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/Avalanche_License"):
         """
         Get the Avalanche TCL config files from version controlled repository and move them to avalanche_path
+
+        args = {
+                    testbed: testbed name - used for name of parent folder in repo to grab an Avalanche test case (e.g. ERPS)
+                    avalanche_test_name: the sub parent folder under the testbed that defines the Avalanche project and test (e.g. ERPS_NODE1_1-NODE_1)
+                    repo_dir: currently, the filepath to the shared SVN Avalanche config files - defaults to "C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche"
+                    license_dir: currently, the filepath to the shared SVN Avalanche license files - defaults to "C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/Avalanche_License"
+                }
+
+        The arguments here are needed to point to the SVN Avalanche configuration files - eventually will most likely be severed with migration to python/robot using some github/perforce version control
+
         """
+        #overwrite avalanche_path directory "C:/AvalancheExeDir"
+        avalanche_path = self.avalanche_path.replace("\\", "/")
+        try:
+            #delete directory
+            shutil.rmtree(avalanche_path)
+            logging.info("Deleted directory {0}".format(avalanche_path))
+        except:
+            #directory not found
+            logging.info("Unknown directory {0}".format(avalanche_path))
+
+        #build out location containing the desired Avalanche test to run
+        avalanche_src_filepath_test = repo_dir + "/" + testbed + "/" + avalanche_test_name
+        avalanche_src_filepath_lic = license_dir
+        logging.info("Avalanche license filepath: {0}".format(avalanche_src_filepath_lic))
+        logging.info("Avalanche test filepath: {0}".format(avalanche_src_filepath_test))
+
+        #must copy the license files first
+
+        #loop over list of files within license directory and copy to avalanche_path
+        self.copy_files(avalanche_src_filepath_lic, avalanche_path)
+        #get list of files within Avalanche test directory and copy to avalanche_path
+        self.copy_files(avalanche_src_filepath_test, avalanche_path)
+
+
+    def copy_files(self, src, dst, symlinks=False, ignore=None):
+        """
+        Simple method to aid in copying over Avalanche files from one directory to another
+
+        args = {
+                    src: the absolute source directory (e.g "C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/ERPS/ERPS_NODE1_1-NODE_1")
+                    dst: the absolute destination directory (e.g. "C:/AvalancheExeDir")
+                    symlinks, ignore: shutil.copytree args
+                }
+        """
+        for filename in os.listdir(src):
+            #join the path and filename
+            file_src = os.path.join(src, filename)
+            file_dst = os.path.join(dst, filename)
+            #if directory, use copytree; else, use copy2
+            if os.path.isdir(file_src):
+                shutil.copytree(file_src, file_dst, symlinks, ignore)
+            else:
+                shutil.copy2(file_src, file_dst)
+
 
 if __name__ == '__main__':
     """
@@ -259,12 +371,23 @@ if __name__ == '__main__':
     #initialize some example variables
     license_file = "C100_Lic"
     output_dir = "C:/AvalancheExeDir"
-    #association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
-    association_list = ["OctalOLT_Node1_Slot4"]
+    testbed = "ERPS"
+    avalanche_test_name = "ERPS_NODE1_1-NODE_1"
+    testbed = "SM040"
+    avalanche_test_name = "SM040_CSLAG_LoadTest_SC_80G-8port_Shelf_Test"
+    association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
 
+    #initiate Avalanche instance
     instance = Avalanche()
+    #copy Avlanche test and license files
+    instance.get_config_files(testbed, avalanche_test_name)
+    #force reserve Avlanche ports
     instance.force_reserve_ports(True)
+    #set the Avalanche license file
     instance.set_license_file(license_file)
+    #set the Avalanche results output directory
     instance.set_output_dir()
+    #set the Avalanche associations to run for a given test
     instance.set_associations(association_list)
-    #instance.start()
+    #start the test
+    instance.start()

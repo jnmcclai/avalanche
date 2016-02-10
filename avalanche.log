@@ -1,4 +1,3 @@
-2016-02-10 07:17:24,013 FILE: C:/AvalancheExeDir/config.tcl;ReserveForce: True
-2016-02-10 07:17:24,026 License: C100_Lic
-2016-02-10 07:17:24,039 Output Directory: C:/AvalancheExeDir
-2016-02-10 07:17:24,096 Associations enabled: ['OctalOLT_Node1_Slot4']
+2016-02-10 10:17:28,423 Deleted directory C:/AvalancheExeDir
+2016-02-10 10:17:28,423 Avalanche license filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/Avalanche_License
+2016-02-10 10:17:28,423 Avalanche test filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/SM040/SM040_CSLAG_LoadTest_SC_80G-8port_Shelf_Test
