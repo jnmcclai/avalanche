@@ -183,26 +183,38 @@ class Avalanche():
                             new_file.write(re.sub('{.*?}', "{false}", line))
                         else:
                             new_file.write(line)
+
+            #close and move file                    
+            os.close(fh) 
+            move(temp_file, config_file) 
+
             for association in association_list:
                 print association
+                #create a temporary file
+                fh, temp_file = mkstemp()
                 #open config file, make modifications, write to new file
                 with open(temp_file, 'w') as new_file:
                     with open(config_file) as old_file:
                         #enable associations in list both userBased and global associations
                             for line in old_file:
                                 if re.search('.clientSubnet\s+{%s}' % association, line):
+                                    #write .clientSubnet line to file
                                     new_file.write(line)
-                                    print line
+                                    #skip to next line
                                     line = old_file.next()
-                                    print line
-                                    new_file.write(re.sub('{.*?}', "{junk}", line))
+                                    #use regex sub to enable association
+                                    new_file.write(re.sub('{.*?}', "{true}", line))
                                 else:
                                     new_file.write(line)
+                #close and move file                    
+                os.close(fh) 
+                move(temp_file, config_file) 
+
+            #log list of associations to be deleted
             logging.info("Associations enabled: {0}".format(associations))
 
-        #close and move file                    
-        os.close(fh) 
-        move(temp_file, config_file) 
+
+
 
     def set_runtime(self):
         """
@@ -247,8 +259,8 @@ if __name__ == '__main__':
     #initialize some example variables
     license_file = "C100_Lic"
     output_dir = "C:/AvalancheExeDir"
-    association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
-    #association_list = ["OctalOLT_Node1_Slot4"]
+    #association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
+    association_list = ["OctalOLT_Node1_Slot4"]
 
     instance = Avalanche()
     instance.force_reserve_ports(True)
