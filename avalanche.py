@@ -45,20 +45,20 @@ class Avalanche():
         Navigates to avalanche_path directory and runs 'tchlsh test.tcl'
         """
         #change directories 
-        logging.info("Directory changed {0}".format(self.avalanche_path))
+        logging.info("[FILE.INFO]: Directory changed {0}".format(self.avalanche_path))
         try:    
             os.chdir(self.avalanche_path)
         except:
-            logging.warning("Unknown directory {0}".format(self.avalanche_path))
-            raise AssertionError("Unknown directory {0}".format(self.avalanche_path))
+            logging.warning("[FILE.WARNING]: Unknown directory {0}".format(self.avalanche_path))
+            raise AssertionError("[FILE.WARNING]: Unknown directory {0}".format(self.avalanche_path))
 
         #start test
-        logging.info("Starting Avalanche test...")
+        logging.info("[AVALANCHE]: Starting Avalanche test...")
         try:    
             os.system('tclsh test.tcl')
         except:
-            logging.warning("Avalanche test.tcl does not exist")
-            raise AssertionError("Avalanche test.tcl does not exist".format(self.avalanche_path))
+            logging.warning("[FILE.WARNING]: Avalanche test.tcl does not exist")
+            raise AssertionError("[FILE.WARNING]: Avalanche test.tcl does not exist".format(self.avalanche_path))
     def generate_avalanche_tcl_script(self):
         """
         Generates TCL script from an Avalanche test via test.tcl
@@ -86,7 +86,7 @@ class Avalanche():
                 for line in old_file:
                     if re.search('ReserveForce\s+\d', line):
                         new_file.write(re.sub('\d', str(reserve_force_bit), line))
-                        logging.info("FILE: {0};ReserveForce: True".format(config_file.replace('\\', '/')))
+                        logging.info("[FILE.INFO]: {0}; ReserveForce: True".format(config_file.replace('\\', '/')))
                     else:
                         new_file.write(line)
         #close and move file                    
@@ -107,7 +107,7 @@ class Avalanche():
                 for line in old_file:
                     if re.search('License\s+{', line):
                         new_file.write(re.sub('{.*?}', "{%s}", line) % lic_file)
-                        logging.info('License: {0}'.format(lic_file))
+                        logging.info('[FILE.INFO]: License: {0}'.format(lic_file))
                     else:
                         new_file.write(line)
 
@@ -140,7 +140,7 @@ class Avalanche():
                 for line in old_file:
                     if re.search('OutputDir\s+{', line):
                         new_file.write(re.sub('{.*?}', "{%s}", line) % output_dir)
-                        logging.info('Output Directory: {0}'.format(output_dir))
+                        logging.info('[FILE.INFO]: Output Directory: {0}'.format(output_dir))
                     else:
                         new_file.write(line)
 
@@ -173,7 +173,7 @@ class Avalanche():
                             new_file.write(re.sub('{.*?}', "{true}", line))
                         else:
                             new_file.write(line)
-                    logging.info("Associations enabled: {0}".format(assocations.lower()))
+                    logging.info("[FILE.INFO]: Associations enabled: {0}".format(assocations.lower()))
         else:
             #open config file, make modifications, write to new file
             with open(temp_file, 'w') as new_file:
@@ -189,96 +189,126 @@ class Avalanche():
             os.close(fh) 
             shutil.move(temp_file, config_file) 
 
-            for association in association_list:
-                print association
+            for association in association_list: 
                 #create a temporary file
                 fh, temp_file = mkstemp()
                 #open config file, make modifications, write to new file
                 with open(temp_file, 'w') as new_file:
                     with open(config_file) as old_file:
                         #enable associations in list both userBased and global associations
-                            for line in old_file:
-                                if re.search('.clientSubnet\s+{%s}' % association, line):
-                                    #write .clientSubnet line to file
-                                    new_file.write(line)
-                                    #skip to next line
-                                    line = old_file.next()
-                                    #use regex sub to enable association
-                                    new_file.write(re.sub('{.*?}', "{true}", line))
-                                else:
-                                    new_file.write(line)
+                        for line in old_file:
+                            if re.search('.clientSubnet\s+{%s}' % association, line):
+                                #write .clientSubnet line to file
+                                new_file.write(line)
+                                #skip to next line
+                                line = old_file.next()
+                                #use regex sub to enable association
+                                new_file.write(re.sub('{.*?}', "{true}", line))
+                            else:
+                                new_file.write(line)
                 #close and move file                    
                 os.close(fh) 
                 shutil.move(temp_file, config_file) 
 
             #log list of associations to be deleted
-            logging.info("Associations enabled: {0}".format(associations))
+            logging.info("[FILE.INFO]: Associations enabled: {0}".format(associations))
 
-    def set_runtime(self, associations="all", param="soak"):
+    def set_runtime(self, runtime, param="soak", loads=None):
         """
         Modifies the Avalanche TCL script to set the Avalanche run time properties
 
-        args = {
-                    param: the runtime parameter to adjust [Soak|RampUp|RampDown]
+        args = {    
+                    runtime: the time in seconds to change to
+                    associations: the associaitions to enable [all|list of subnet names]
+                    param: the runtime parameter to adjust [Soak|RampUp|RampDown] 
+                    loads: if a list is defined then set the runtime properties for those load profiles only, else set the runtime properties for all the loads (including default) - again important on label syntax (if you do not know what this is, you probably want to leave it undefined)
                 }
 
         Allow to change RampUp, Steady Time, RampDown time via arguments with defaults
+        It is important to know this only works if the developer of the Avalanche test cases sets the load configuration labels appropriately - strictly using only case insensitive [Soak|Steady Time|RampUp|Ramp Up|RampDown|Ramp Down]
         """
                 #define config file
         config_file = self.avalanche_abs_config_file
         #create a temporary file
         fh, temp_file = mkstemp()
 
-        if associations == "all":
+        #Modify the Avalanche load time in config.tcl
+        if "up" in param.lower():
+            logging.info("[FILE.INFO]: config.tcl; load config; RampUp; Time: {0}".format(runtime))
             #open config file, make modifications, write to new file
             with open(temp_file, 'w') as new_file:
                 with open(config_file) as old_file:
-                    #enable all associations both userBased and global associations
+                    #set the rampTime for the available load profiles matching under {Ramp Up} or {RampUp} - case insensitive
                     for line in old_file:
-                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
-                            new_file.write(re.sub('{.*?}', "{true}", line))
+                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Up}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampUp}', line, re.IGNORECASE):
+                            #skip five lines and write them to the file to get to the rampTime property
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            #use regex sub to set the rampTime - units: seconds
+                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
                         else:
                             new_file.write(line)
-                    logging.info("Associations enabled: {0}".format(assocations.lower()))
+
+        elif "down" in param.lower():
+            logging.info("[FILE.INFO]: config.tcl; load config; RampDown; Time: {0}".format(runtime))
+            #open config file, make modifications, write to new file
+            with open(temp_file, 'w') as new_file:
+                with open(config_file) as old_file:
+                    #set the rampTime for the available load profiles matching under {Ramp Down} or {RampDown} - case insensitive
+                    for line in old_file:
+                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Down}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampDown}', line, re.IGNORECASE):
+                            #skip five lines and write them to the file to get to the rampTime property
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            #use regex sub to set the rampTime - units: seconds
+                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                        else:
+                            new_file.write(line)
         else:
+            logging.info("[FILE.INFO]: config.tcl; load config; SteadyState; Time: {0}".format(runtime))
             #open config file, make modifications, write to new file
             with open(temp_file, 'w') as new_file:
                 with open(config_file) as old_file:
-                    #disable all associations both userBased and global associations
+                    #set the rampTime for the available load profiles matching under {Soak} or {Steady\s+State} - case insensitive
                     for line in old_file:
-                        if re.search('.client.userBasedAssociations.association\(\d+\).enabled', line) or re.search('.client.globalAssociations.association\(\d+\).enabled', line):
-                            new_file.write(re.sub('{.*?}', "{false}", line))
+                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Soak}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Steady\s+State}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{SteadyState}', line, re.IGNORECASE):
+                            #skip six lines and write them to the file to get to the steadyTime property
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            new_file.write(line)
+                            line = old_file.next()
+                            #use regex sub to set the rampTime - units: seconds
+                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
                         else:
                             new_file.write(line)
 
-            #close and move file                    
-            os.close(fh) 
-            shutil.move(temp_file, config_file) 
-
-            for association in association_list:
-                print association
-                #create a temporary file
-                fh, temp_file = mkstemp()
-                #open config file, make modifications, write to new file
-                with open(temp_file, 'w') as new_file:
-                    with open(config_file) as old_file:
-                        #enable associations in list both userBased and global associations
-                            for line in old_file:
-                                if re.search('.clientSubnet\s+{%s}' % association, line):
-                                    #write .clientSubnet line to file
-                                    new_file.write(line)
-                                    #skip to next line
-                                    line = old_file.next()
-                                    #use regex sub to enable association
-                                    new_file.write(re.sub('{.*?}', "{true}", line))
-                                else:
-                                    new_file.write(line)
-                #close and move file                    
-                os.close(fh) 
-                shutil.move(temp_file, config_file) 
-
-            #log list of associations to be deleted
-            logging.info("Associations enabled: {0}".format(associations))
+        #close and move file                    
+        os.close(fh) 
+        shutil.move(temp_file, config_file) 
 
     def analyze_results(self):
         """
@@ -319,16 +349,16 @@ class Avalanche():
         try:
             #delete directory
             shutil.rmtree(avalanche_path)
-            logging.info("Deleted directory {0}".format(avalanche_path))
-        except:
+            logging.info("[FILE.INFO]: Deleted directory {0}".format(avalanche_path))
+        except EnvironmentError, e:
             #directory not found
-            logging.info("Unknown directory {0}".format(avalanche_path))
+            logging.warning("[FILE.ERROR]: {0}; {1}".format(avalanche_path, e))
 
         #build out location containing the desired Avalanche test to run
         avalanche_src_filepath_test = repo_dir + "/" + testbed + "/" + avalanche_test_name
         avalanche_src_filepath_lic = license_dir
-        logging.info("Avalanche license filepath: {0}".format(avalanche_src_filepath_lic))
-        logging.info("Avalanche test filepath: {0}".format(avalanche_src_filepath_test))
+        logging.info("[FILE.INFO]: Avalanche license filepath: {0}".format(avalanche_src_filepath_lic))
+        logging.info("[FILE.INFO]: Avalanche test filepath: {0}".format(avalanche_src_filepath_test))
 
         #must copy the license files first
 
@@ -373,9 +403,10 @@ if __name__ == '__main__':
     output_dir = "C:/AvalancheExeDir"
     testbed = "ERPS"
     avalanche_test_name = "ERPS_NODE1_1-NODE_1"
-    testbed = "SM040"
-    avalanche_test_name = "SM040_CSLAG_LoadTest_SC_80G-8port_Shelf_Test"
     association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
+    time_ramp_up = '15'
+    time_steady = '100'
+    time_ramp_down = '10'
 
     #initiate Avalanche instance
     instance = Avalanche()
@@ -389,5 +420,11 @@ if __name__ == '__main__':
     instance.set_output_dir()
     #set the Avalanche associations to run for a given test
     instance.set_associations(association_list)
+    #set the RampUp rampTime
+    instance.set_runtime(time_ramp_up, param="RampUp")
+    #set the Steady State steadyTime
+    instance.set_runtime(time_steady)
+    #set the RampDown rampTime
+    instance.set_runtime(time_ramp_down, param="RampDown")
     #start the test
     instance.start()

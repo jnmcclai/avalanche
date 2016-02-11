@@ -1,3 +1,12 @@
-2016-02-10 10:17:28,423 Deleted directory C:/AvalancheExeDir
-2016-02-10 10:17:28,423 Avalanche license filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/Avalanche_License
-2016-02-10 10:17:28,423 Avalanche test filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/SM040/SM040_CSLAG_LoadTest_SC_80G-8port_Shelf_Test
+2016-02-11 14:52:51,861 [FILE.ERROR]: C:/AvalancheExeDir; [Error 145] The directory is not empty: 'C:/AvalancheExeDir'
+2016-02-11 14:52:51,861 [FILE.INFO]: Avalanche license filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/Avalanche_License
+2016-02-11 14:52:51,861 [FILE.INFO]: Avalanche test filepath: C:/iTest_4.0/PQ_Production_Project/ConfigurationFiles/Avalanche/ERPS/ERPS_NODE1_1-NODE_1
+2016-02-11 14:52:52,105 [FILE.INFO]: C:/AvalancheExeDir/config.tcl; ReserveForce: True
+2016-02-11 14:52:52,118 [FILE.INFO]: License: C100_Lic
+2016-02-11 14:52:52,131 [FILE.INFO]: Output Directory: C:/AvalancheExeDir
+2016-02-11 14:52:52,197 [FILE.INFO]: Associations enabled: ['OctalOLT_Node1_Slot3', 'OctalOLT_Node1_Slot4']
+2016-02-11 14:52:52,197 [FILE.INFO]: config.tcl; load config; RampUp; Time: 15
+2016-02-11 14:52:52,220 [FILE.INFO]: config.tcl; load config; SteadyState; Time: 100
+2016-02-11 14:52:52,250 [FILE.INFO]: config.tcl; load config; RampDown; Time: 10
+2016-02-11 14:52:52,272 [FILE.INFO]: Directory changed C:\AvalancheExeDir
+2016-02-11 14:52:52,273 [AVALANCHE]: Starting Avalanche test...
