@@ -213,102 +213,140 @@ class Avalanche():
             #log list of associations to be deleted
             logging.info("[FILE.INFO]: Associations enabled: {0}".format(associations))
 
-    def set_runtime(self, runtime, param="soak", loads=None):
-        """
-        Modifies the Avalanche TCL script to set the Avalanche run time properties
+    # def set_runtime(self, runtime, param="soak", loads=None):
+    #     """
+    #     Modifies the Avalanche TCL script to set the Avalanche run time properties
 
-        args = {    
-                    runtime: the time in seconds to change to
-                    associations: the associaitions to enable [all|list of subnet names]
-                    param: the runtime parameter to adjust [Soak|RampUp|RampDown] 
-                    loads: if a list is defined then set the runtime properties for those load profiles only, else set the runtime properties for all the loads (including default) - again important on label syntax (if you do not know what this is, you probably want to leave it undefined)
-                }
+    #     args = {    
+    #                 runtime: the time in seconds to change to
+    #                 associations: the associaitions to enable [all|list of subnet names]
+    #                 param: the runtime parameter to adjust [Soak|RampUp|RampDown] 
+    #                 loads: if a list is defined then set the runtime properties for those load profiles only, else set the runtime properties for all the loads (including default) - again important on label syntax (if you do not know what this is, you probably want to leave it undefined)
+    #             }
 
-        Allow to change RampUp, Steady Time, RampDown time via arguments with defaults
-        It is important to know this only works if the developer of the Avalanche test cases sets the load configuration labels appropriately - strictly using only case insensitive [Soak|Steady Time|RampUp|Ramp Up|RampDown|Ramp Down]
-        """
-                #define config file
-        config_file = self.avalanche_abs_config_file
-        #create a temporary file
-        fh, temp_file = mkstemp()
+    #     Allow to change RampUp, Steady Time, RampDown time via arguments with defaults
+    #     It is important to know this only works if the developer of the Avalanche test cases sets the load configuration labels appropriately - strictly using only case insensitive [Soak|Steady Time|RampUp|Ramp Up|RampDown|Ramp Down]
+    #     """
+    #     #define config file
+    #     config_file = self.avalanche_abs_config_file
+    #     #create a temporary file
+    #     fh, temp_file = mkstemp()
 
-        #Modify the Avalanche load time in config.tcl
-        if "up" in param.lower():
-            logging.info("[FILE.INFO]: config.tcl; load config; RampUp; Time: {0}".format(runtime))
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    #set the rampTime for the available load profiles matching under {Ramp Up} or {RampUp} - case insensitive
-                    for line in old_file:
-                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Up}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampUp}', line, re.IGNORECASE):
-                            #skip five lines and write them to the file to get to the rampTime property
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            #use regex sub to set the rampTime - units: seconds
-                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
-                        else:
-                            new_file.write(line)
+    #     #only adjust runtime properties for those load profiles defined
+    #     if loads:
+    #     logging.info("[FILE.INFO]: config.tcl; load config; loads: {0}".format(loads))
+    #         for load in loads: 
+    #             if "up" in param.lower():
+    #             logging.info("[FILE.INFO]: config.tcl; load config; RampUp; Time: {0}".format(runtime))
+    #             #create a temporary file
+    #             fh, temp_file = mkstemp()
+    #             #open config file, make modifications, write to new file
+    #             with open(temp_file, 'w') as new_file:
+    #                 with open(config_file) as old_file:
+    #                     #find all the load profiles that match
+    #                     for line in old_file:
+    #                         if re.search('set\s+loadprofile_handle\s+\[getOrCreateNode\s+\$projectHandle\s+loads\s+ %s' % load, line):
+    #                             #found a matching load profile
+    #                             #write that line
+    #                             new_file.write(line)
+    #                             while True:
+    #                                 #get the next line
+    #                                 line = old_file.next()
 
-        elif "down" in param.lower():
-            logging.info("[FILE.INFO]: config.tcl; load config; RampDown; Time: {0}".format(runtime))
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    #set the rampTime for the available load profiles matching under {Ramp Down} or {RampDown} - case insensitive
-                    for line in old_file:
-                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Down}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampDown}', line, re.IGNORECASE):
-                            #skip five lines and write them to the file to get to the rampTime property
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            #use regex sub to set the rampTime - units: seconds
-                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
-                        else:
-                            new_file.write(line)
-        else:
-            logging.info("[FILE.INFO]: config.tcl; load config; SteadyState; Time: {0}".format(runtime))
-            #open config file, make modifications, write to new file
-            with open(temp_file, 'w') as new_file:
-                with open(config_file) as old_file:
-                    #set the rampTime for the available load profiles matching under {Soak} or {Steady\s+State} - case insensitive
-                    for line in old_file:
-                        if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Soak}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Steady\s+State}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{SteadyState}', line, re.IGNORECASE):
-                            #skip six lines and write them to the file to get to the steadyTime property
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            new_file.write(line)
-                            line = old_file.next()
-                            #use regex sub to set the rampTime - units: seconds
-                            new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
-                        else:
-                            new_file.write(line)
 
-        #close and move file                    
-        os.close(fh) 
-        shutil.move(temp_file, config_file) 
+    #                             #grab a new line - loop
+    #                             #check if that line contains a set load profile
+    #                             #if it does break out 
+    #                             new_file.write(line)
+    #                             #skip to next line
+    #                             line = old_file.next()
+    #                             #use regex sub to enable association
+    #                             new_file.write(re.sub('{.*?}', "{true}", line))
+    #                         else:
+    #                             new_file.write(line)
+    #             #close and move file                    
+    #             os.close(fh) 
+    #             shutil.move(temp_file, config_file) 
+
+
+    #     #adjust all runtime properties for the load profiles
+    #     else:
+    #         if "up" in param.lower():
+    #             logging.info("[FILE.INFO]: config.tcl; load config; RampUp; Time: {0}".format(runtime))
+    #             #open config file, make modifications, write to new file
+    #             with open(temp_file, 'w') as new_file:
+    #                 with open(config_file) as old_file:
+    #                     #set the rampTime for the available load profiles matching under {Ramp Up} or {RampUp} - case insensitive
+    #                     for line in old_file:
+    #                         if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Up}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampUp}', line, re.IGNORECASE):
+    #                             #skip five lines and write them to the file to get to the rampTime property
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             #use regex sub to set the rampTime - units: seconds
+    #                             new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+    #                         else:
+    #                             new_file.write(line)
+
+    #         elif "down" in param.lower():
+    #             logging.info("[FILE.INFO]: config.tcl; load config; RampDown; Time: {0}".format(runtime))
+    #             #open config file, make modifications, write to new file
+    #             with open(temp_file, 'w') as new_file:
+    #                 with open(config_file) as old_file:
+    #                     #set the rampTime for the available load profiles matching under {Ramp Down} or {RampDown} - case insensitive
+    #                     for line in old_file:
+    #                         if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Down}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampDown}', line, re.IGNORECASE):
+    #                             #skip five lines and write them to the file to get to the rampTime property
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             #use regex sub to set the rampTime - units: seconds
+    #                             new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+    #                         else:
+    #                             new_file.write(line)
+    #         else:
+    #             logging.info("[FILE.INFO]: config.tcl; load config; SteadyState; Time: {0}".format(runtime))
+    #             #open config file, make modifications, write to new file
+    #             with open(temp_file, 'w') as new_file:
+    #                 with open(config_file) as old_file:
+    #                     #set the rampTime for the available load profiles matching under {Soak} or {Steady\s+State} - case insensitive
+    #                     for line in old_file:
+    #                         if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Soak}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Steady\s+State}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{SteadyState}', line, re.IGNORECASE):
+    #                             #skip six lines and write them to the file to get to the steadyTime property
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             new_file.write(line)
+    #                             line = old_file.next()
+    #                             #use regex sub to set the rampTime - units: seconds
+    #                             new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+    #                         else:
+    #                             new_file.write(line)
+
+    #     #close and move file                    
+    #     os.close(fh) 
+    #     shutil.move(temp_file, config_file) 
 
     def analyze_results(self):
         """
@@ -388,6 +426,213 @@ class Avalanche():
             else:
                 shutil.copy2(file_src, file_dst)
 
+    def set_runtime_full(self, runtime, param="soak", loads=None):
+            """
+            Modifies the Avalanche TCL script to set the Avalanche run time properties
+
+            args = {    
+                        runtime: the time in seconds to change to
+                        associations: the associaitions to enable [all|list of subnet names]
+                        param: the runtime parameter to adjust [Soak|RampUp|RampDown] 
+                        loads: if a list is defined then set the runtime properties for those load profiles only, else set the runtime properties for all the loads (including default) - again important on label syntax (if you do not know what this is, you probably want to leave it undefined)
+                    }
+
+            Allow to change RampUp, Steady Time, RampDown time via arguments with defaults
+            It is important to know this only works if the developer of the Avalanche test cases sets the load configuration labels appropriately - strictly using only case insensitive [Soak|Steady Time|RampUp|Ramp Up|RampDown|Ramp Down]
+            """
+            print loads
+            #define config file
+            config_file = self.avalanche_abs_config_file
+            #create a temporary file
+            fh, temp_file = mkstemp()
+
+            ###only adjust runtime properties for those load profiles defined###
+            if loads:
+                logging.info("[FILE.INFO]: config.tcl; load config; loads: {0}".format(loads))
+                #loop over all the loads
+                for load in loads:
+                    print load
+                    #create a temporary file
+                    fh, temp_file = mkstemp()
+                    #open config file, make modifications, write to new file
+                    with open(temp_file, 'w') as new_file:
+                        with open(config_file) as old_file:
+                            #find all the load profiles that match
+                            for line in old_file:
+                                if re.search('set\s+loadprofile_handle\s+\[getOrCreateNode\s+\$projectHandle\s+loads\s+%s' % load, line):
+                                    print line
+                                    #found a matching load profile
+                                    #write that line
+                                    new_file.write(line)
+                                    while True:
+                                        #get the next line, if it exists
+                                        try:
+                                            line = old_file.next()
+                                        except StopIteration:
+                                            break
+                                        #see if the line deals with loadprofile handling
+                                        if re.search('set\s+loadprofile_handle', line):
+                                            #it does so will break and check to see if it is one of the loads we want
+                                            #if it is the last load element, then we need to write it back to the file so it will not get skipped
+                                            print line
+                                            if load == loads[-1]:
+                                                new_file.write(line)
+                                            break
+                                            #new_file.write(line)
+                                        else:
+                                            #set RampUp rampTime property
+                                            if "up" in param.lower():
+                                                logging.info("[FILE.INFO]: config.tcl; load '{0}'; RampUp; Time: {1}".format(load, runtime))
+                                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Up}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampUp}', line, re.IGNORECASE):
+                                                    #skip five lines and write them to the file to get to the rampTime property
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    #use regex sub to set the rampTime - units: seconds
+                                                    new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                                else:
+                                                    new_file.write(line)
+                                                
+                                            
+                                            #set RampDown rampTime property
+                                            elif "down" in param.lower():
+                                                logging.info("[FILE.INFO]: config.tcl; load '{0}'; RampDown; Time: {1}".format(load, runtime))
+                                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Down}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampDown}', line, re.IGNORECASE):
+                                                    #skip five lines and write them to the file to get to the rampTime property
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    #use regex sub to set the rampTime - units: seconds
+                                                    new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                                else:
+                                                    new_file.write(line)
+
+                                            #set Steady State/Soak steadyTime property
+                                            else:
+                                                logging.info("[FILE.INFO]: config.tcl; load '{0}'; Soak; Time: {1}".format(load, runtime))
+                                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Soak}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Steady\s+State}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{SteadyState}', line, re.IGNORECASE):
+                                                    #skip six lines and write them to the file to get to the steadyTime property
+                                                    print line
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    new_file.write(line)
+                                                    line = old_file.next()
+                                                    #use regex sub to set the rampTime - units: seconds
+                                                    test = re.sub('{.*?}', "{%s}" % runtime, line)
+                                                    print test
+                                                    new_file.write(test)
+                                                    #new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                                else:
+                                                    new_file.write(line)
+                                else:
+                                    #not a line with matching load profile
+                                    new_file.write(line)
+
+                    #close and move file each time
+                    os.close(fh) 
+                    shutil.move(temp_file, config_file) 
+
+            ####adjust the runtime properties for all the load profiles###
+            else:
+                if "up" in param.lower():
+                    logging.info("[FILE.INFO]: config.tcl; load config; RampUp; Time: {0}".format(runtime))
+                    #open config file, make modifications, write to new file
+                    with open(temp_file, 'w') as new_file:
+                        with open(config_file) as old_file:
+                            #set the rampTime for the available load profiles matching under {Ramp Up} or {RampUp} - case insensitive
+                            for line in old_file:
+                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Up}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampUp}', line, re.IGNORECASE):
+                                    #skip five lines and write them to the file to get to the rampTime property
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    #use regex sub to set the rampTime - units: seconds
+                                    new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                else:
+                                    new_file.write(line)
+
+                elif "down" in param.lower():
+                    logging.info("[FILE.INFO]: config.tcl; load config; RampDown; Time: {0}".format(runtime))
+                    #open config file, make modifications, write to new file
+                    with open(temp_file, 'w') as new_file:
+                        with open(config_file) as old_file:
+                            #set the rampTime for the available load profiles matching under {Ramp Down} or {RampDown} - case insensitive
+                            for line in old_file:
+                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Ramp\s+Down}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{RampDown}', line, re.IGNORECASE):
+                                    #skip five lines and write them to the file to get to the rampTime property
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    #use regex sub to set the rampTime - units: seconds
+                                    new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                else:
+                                    new_file.write(line)
+                else:
+                    logging.info("[FILE.INFO]: config.tcl; load config; SteadyState; Time: {0}".format(runtime))
+                    #open config file, make modifications, write to new file
+                    with open(temp_file, 'w') as new_file:
+                        with open(config_file) as old_file:
+                            #set the rampTime for the available load profiles matching under {Soak} or {Steady\s+State} - case insensitive
+                            for line in old_file:
+                                if re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Soak}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{Steady\s+State}', line, re.IGNORECASE) or re.search('loadprofile_handle\s+-steps.step\(\d+\).label\s+{SteadyState}', line, re.IGNORECASE):
+                                    #skip six lines and write them to the file to get to the steadyTime property
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    new_file.write(line)
+                                    line = old_file.next()
+                                    #use regex sub to set the rampTime - units: seconds
+                                    new_file.write(re.sub('{.*?}', "{%s}" % runtime, line))
+                                else:
+                                    new_file.write(line)
+
+                #close and move file                    
+                os.close(fh) 
+                shutil.move(temp_file, config_file) 
+
 
 if __name__ == '__main__':
     """
@@ -404,14 +649,18 @@ if __name__ == '__main__':
     testbed = "ERPS"
     avalanche_test_name = "ERPS_NODE1_1-NODE_1"
     association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
-    time_ramp_up = '15'
-    time_steady = '100'
-    time_ramp_down = '10'
+    loads = ["erpsClientLoadProfile_Node1", "Default"]
+    #loads = ["Default"]
+    #loads = ["erpsClientLoadProfile_Node1"]
+    loads = ["Default", "erpsClientLoadProfile_Node1"]
+    time_ramp_up = '1111111111111'
+    time_steady = '77777777777777777777'
+    time_ramp_down = '333333333333333'
 
     #initiate Avalanche instance
     instance = Avalanche()
     #copy Avlanche test and license files
-    instance.get_config_files(testbed, avalanche_test_name)
+    #instance.get_config_files(testbed, avalanche_test_name)
     #force reserve Avlanche ports
     instance.force_reserve_ports(True)
     #set the Avalanche license file
@@ -421,10 +670,25 @@ if __name__ == '__main__':
     #set the Avalanche associations to run for a given test
     instance.set_associations(association_list)
     #set the RampUp rampTime
-    instance.set_runtime(time_ramp_up, param="RampUp")
+    #instance.set_runtime_full(time_ramp_up, param="RampUp")
     #set the Steady State steadyTime
-    instance.set_runtime(time_steady)
+    #instance.set_runtime_full(time_steady)
     #set the RampDown rampTime
-    instance.set_runtime(time_ramp_down, param="RampDown")
+    #instance.set_runtime_full(time_ramp_down, param="RampDown")
+    #example setting RampUp rampTime for a set of loads
+    #instance.set_runtime_full(time_ramp_up, param="RampUp", loads=loads)
+    #example setting Steady State steadyTime for a set of loads
+    instance.set_runtime_full(time_steady, loads=loads)
+    #example setting RampDown rampTime for a set of loads
+    #instance.set_runtime_full(time_ramp_down, param="RampDown")
     #start the test
-    instance.start()
+    #instance.start()
+
+
+    ########################
+    #Seeing weird bug with the runtime method for setting multiple loads steady time
+    #it appears to only be setting the last load in the list - works fine with just one item
+    #
+    #I think I fixed the bug above, but still failing with the config above in which 3 profiles and one in the
+    #middle is breaking or something...
+    ########################
