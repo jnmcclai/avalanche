@@ -225,10 +225,32 @@ class Avalanche():
         """
         Analyze the Avalanche test results fairness
         """
-    def get_directories(self):
+    def get_directories(self, output_dir):
         """
         Get a list of directories
         """
+        #tack on /results to the output directory to give something like "C:/AvalancheExeDir/results"
+        results_dir = output_dir + "/results"
+        client_results = list()
+        
+        #loop over the directories in Avalanche result directory and append directory name if contains client
+        try:
+            for directory in os.listdir(results_dir):
+                if re.search('client', directory):
+                    client_results.append(directory)
+                else:
+                    pass
+        except EnvironmentError, e:
+            #directory not found
+            logging.warning("[AVALANCHE.ERROR]: {0}; {1}".format(results_dir, e))
+        #verify we got something
+        if len(client_results) == 0:
+            raise AssertionError("[AVALANCHE.ERROR]: {0}; No client results found!".format(results_dir))
+        #log the client result directories retrieved
+        logging.info("[AVALANCHE.RESULTS]: {0}; Client Directories: {1}".format(results_dir, client_results))
+        #return list of client results directories
+        return client_results
+
     def publish_results(self):
         """
         Publish Avalanche test results to database
@@ -525,26 +547,29 @@ if __name__ == '__main__':
     #initiate Avalanche instance
     instance = Avalanche()
     #copy Avlanche test and license files
-    instance.get_config_files(testbed, avalanche_test_name)
-    #force reserve Avlanche ports
-    instance.force_reserve_ports(True)
-    #set the Avalanche license file
-    instance.set_license_file(license_file)
-    #set the Avalanche results output directory
-    instance.set_output_dir()
-    #set the Avalanche associations to run for a given test
-    instance.set_associations(association_list)
-    #set the RampUp rampTime
-    instance.set_runtime(time_ramp_up, param="RampUp")
-    #set the Steady State steadyTime
-    instance.set_runtime(time_steady)
-    #set the RampDown rampTime
-    instance.set_runtime(time_ramp_down, param="RampDown")
-    #example setting RampUp rampTime for a set of loads
-    instance.set_runtime(time_ramp_up, param="RampUp", loads=loads)
-    #example setting Steady State steadyTime for a set of loads
-    instance.set_runtime_runtime(time_steady, loads=loads)
-    #example setting RampDown rampTime for a set of loads
-    instance.set_runtime(time_ramp_down, param="RampDown")
-    #start the test
-    instance.start()
+    # instance.get_config_files(testbed, avalanche_test_name)
+    # #force reserve Avlanche ports
+    # instance.force_reserve_ports(True)
+    # #set the Avalanche license file
+    # instance.set_license_file(license_file)
+    # #set the Avalanche results output directory
+    # instance.set_output_dir()
+    # #set the Avalanche associations to run for a given test
+    # instance.set_associations(association_list)
+    # #set the RampUp rampTime
+    # instance.set_runtime(time_ramp_up, param="RampUp")
+    # #set the Steady State steadyTime
+    # instance.set_runtime(time_steady)
+    # #set the RampDown rampTime
+    # instance.set_runtime(time_ramp_down, param="RampDown")
+    # #example setting RampUp rampTime for a set of loads
+    # instance.set_runtime(time_ramp_up, param="RampUp", loads=loads)
+    # #example setting Steady State steadyTime for a set of loads
+    # instance.set_runtime_runtime(time_steady, loads=loads)
+    # #example setting RampDown rampTime for a set of loads
+    # instance.set_runtime(time_ramp_down, param="RampDown")
+    # #start the test
+    # instance.start()
+    #analysis
+    #get list of client result directories - multiple cores
+    instance.get_directories(output_dir)
