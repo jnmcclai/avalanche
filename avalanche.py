@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 from tempfile import mkstemp
+#import database
 
 
 #define some logging
@@ -30,22 +31,33 @@ class Avalanche():
     Class assumes TCL config file has already been built out 
     """
 
-    def __init__(self, avalanche_path="C:\AvalancheExeDir", avalanche_config_filename="config.tcl"):
+    def __init__(self, avalanche_path="C:\AvalancheExeDir", avalanche_config_filename="config.tcl", output_dir="C:\AvalancheExeDir"):
         """
         Class initialization
         """
         self.avalanche_path = avalanche_path
         self.avalanche_config_filename = avalanche_config_filename
         self.avalanche_abs_config_file = self.avalanche_path + "\\" + self.avalanche_config_filename
+        self.output_dir = output_dir
 
-    def start(self):
+    def start(self, trial_mode=False):
         """
         Starts Avalanche TCL test case
 
+        args = {
+                    trial_mode: if 'True', run Avalanche test in trial mode and only run through action list once, else run normal (default)
+                }
+
         Navigates to avalanche_path directory and runs 'tchlsh test.tcl'
         """
+        #toggle the trial mode bit
+        if trial_mode:
+            self.enable_trial_mode(True)
+        else:
+            self.enable_trial_mode(False)
+
         #change directories 
-        logging.info("[FILE.INFO]: Directory changed {0}".format(self.avalanche_path))
+        logging.info("[FILE.INFO]: Directory changed {0}".format(self.avalanche_path.replace('\\', '/')))
         try:    
             os.chdir(self.avalanche_path)
         except:
@@ -123,11 +135,11 @@ class Avalanche():
                     output_dir: the desired Avalanche results output directory
                 }
         """
-        #allow for output_dir to default to avalanche_path
+        #set output_dir - allow user to set the directory or just use the one initialized with the class
         if output_dir:
             output_dir = output_dir
         else:
-            output_dir = self.avalanche_path.replace('\\', '/')
+            output_dir = self.output_dir.replace('\\', '/')
 
         #define config file
         config_file = self.avalanche_abs_config_file
@@ -146,7 +158,45 @@ class Avalanche():
 
         #close and move file                    
         os.close(fh) 
+        shutil.move(temp_file, config_file)
+
+
+    def enable_trial_mode(self, enable_trial_mode=False):
+        """
+        Modifies the Avalanche TCL script to enable the trial run bit to start the test and run the action list only once
+
+        args = {
+                    enable_trial_run: if 'True', set the Trial run bit to 1 and run test in trial mode, else set bit to 0 and run normal mode (default)
+                }
+        """
+        #define file
+        config_file = self.avalanche_abs_config_file
+
+        #create a temporary file
+        fh, temp_file = mkstemp()
+
+        #intialize the enable_trial_bit
+        if enable_trial_mode:
+            enable_trial_bit = '1'
+        else:
+            enable_trial_bit = '0'
+
+        #create a temporary file
+        fh, temp_file = mkstemp()
+        #open config file, make modifications, write to new file
+        with open(temp_file, 'w') as new_file:
+            with open(config_file) as old_file:
+                for line in old_file:
+                    if re.search('Trial\s+\d', line):
+                        new_file.write(re.sub('\d', str(enable_trial_bit), line))
+                        logging.info("[FILE.INFO]: {0}; Trial Mode: {1}".format(self.avalanche_config_filename, enable_trial_mode))
+                    else:
+                        new_file.write(line)
+
+        #close and move file                    
+        os.close(fh) 
         shutil.move(temp_file, config_file) 
+
     def set_associations(self, associations="all"):
         """
         Modifies the Avalanche TCL script to enables/disable Avalanche associations
@@ -211,12 +261,53 @@ class Avalanche():
                 shutil.move(temp_file, config_file) 
 
             #log list of associations to be deleted
-            logging.info("[FILE.INFO]: Associations enabled: {0}".format(associations))
+            logging.info("[FILE.INFO]: config.tcl; Associations enabled: {0}".format(associations))
 
-    def analyze_results(self):
+    def get_results_and_post_to_db(self, dir_list, output_dir=None):
         """
-        Analyze the Avalanche test results
+        Retrieve the Avalanche generated results from the client side hostStats.csv files and publish to database
+
+        args = {
+                    dir_list: list of Avalanche generated client result directories containing hostStats.csv files (e.g. client-subtest_0_core1)
+
+                }
+
+        #for each client hostStats.csv Avalanche results file open up that file
+        #parse through that file looking for valid VLANs (pairs)
+        #exctract 
+        -"Bytes Received"
+        -"Goodput[Http] Cumulative Receive"
+        -"Goodput[Http] Ave Receive Rate (bps)"
+        #publish these results and other test run properties to a database 
+        #these results can then be pulled down and manipulated to test goodput, fairness, etc
         """
+        #set output_dir - allow user to set the directory or just use the one initialized with the class.  Also tack on '/results' to give something like "C:/AvalancheExeDir/results"
+        if output_dir:
+            results_dir = output_dir + "/results"
+        else:
+            results_dir = self.output_dir.replace('\\', '/') + "/results"
+
+        for filename in dir_list:   
+            #build the absolute path to hostStats.csv file
+            client_results = results_dir + "/" + filename + "/hostStats.csv"
+
+            #create a temporary file
+            fh, temp_file = mkstemp()
+
+            #open the hostStats.csv file in each directory to retrieve data
+            with open(temp_file, 'w') as new_file:
+                with open(client_results) as old_file:
+                    for line in old_file:
+                        print line
+                        # if re.search('ReserveForce\s+\d', line):
+                        #     new_file.write(re.sub('\d', str(reserve_force_bit), line))
+                        #     logging.info("[FILE.INFO]: {0}; ReserveForce: {1}".format(self.avalanche_config_filename, force_reserve))
+                        # else:
+                        #     new_file.write(line)
+            #close and move file                    
+            os.close(fh) 
+            shutil.move(temp_file, filename)
+
     def analyze_goodput(self):
         """
         Analzye the Avalanche test results goodput
@@ -225,14 +316,20 @@ class Avalanche():
         """
         Analyze the Avalanche test results fairness
         """
-    def get_directories(self, output_dir):
+    def get_directories(self, output_dir=None):
         """
         Get a list of directories
         """
-        #tack on /results to the output directory to give something like "C:/AvalancheExeDir/results"
-        results_dir = output_dir + "/results"
-        client_results = list()
         
+        #set output_dir - allow user to set the directory or just use the one initialized with the class.  Also tack on '/results' to give something like "C:/AvalancheExeDir/results"
+        if output_dir:
+            results_dir = output_dir + "/results"
+        else:
+            results_dir = self.output_dir.replace('\\', '/') + "/results"
+
+        #initialize client results directory name list 
+        client_results = list()
+
         #loop over the directories in Avalanche result directory and append directory name if contains client
         try:
             for directory in os.listdir(results_dir):
@@ -282,7 +379,6 @@ class Avalanche():
         #build out location containing the desired Avalanche test to run
         avalanche_src_filepath_test = repo_dir + "/" + testbed + "/" + avalanche_test_name
         avalanche_src_filepath_lic = license_dir
-        logging.info("[FILE.INFO]: Avalanche license filepath: {0}".format(avalanche_src_filepath_lic))
         logging.info("[FILE.INFO]: Avalanche test filepath: {0}".format(avalanche_src_filepath_test))
 
         #must copy the license files first
@@ -329,7 +425,7 @@ class Avalanche():
             """
             #define config file
             config_file = self.avalanche_abs_config_file
-            #create a temporary file
+            #create a temporary file - just noticed this could be happening twice in this case!!!
             fh, temp_file = mkstemp()
 
             ###only adjust runtime properties for those load profiles defined###
@@ -526,50 +622,59 @@ if __name__ == '__main__':
     license_file = "C100_Lic"
     output_dir = "C:/AvalancheExeDir"
     testbed = "ERPS"
-    avalanche_test_name = "ERPS_NODE1_1-NODE_1"
+    avalanche_test_name = "ERPS_NODE1-NODE_1"
     association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
     loads = ["erpsClientLoadProfile_Node1", "Default"]
-    # loads = ["Default"]
-    # loads = ["erpsClientLoadProfile_Node1"]
-    # loads = ["Default", "erpsClientLoadProfile_Node1"]
-    # loads = ["myProfile"]
-    # loads = ["myProfile", "Default"]
-    # loads = ["Default", "myProfile"]
-    # loads = ["myProfile", "erpsClientLoadProfile_Node1"]
-    # loads = ["erpsClientLoadProfile_Node1", "myProfile"]
-    # loads = ["erpsClientLoadProfile_Node1", "myProfile", "Default"]
-    # loads = ["myProfile", "Default", "erpsClientLoadProfile_Node1"]
-    # loads = ["Default", "erpsClientLoadProfile_Node1", "myProfile"]
     time_ramp_up = '10'
     time_steady = '300'
     time_ramp_down = '15'
 
     #initiate Avalanche instance
     instance = Avalanche()
+
+    ########MODIFY_CONFIG########
     #copy Avlanche test and license files
-    # instance.get_config_files(testbed, avalanche_test_name)
-    # #force reserve Avlanche ports
-    # instance.force_reserve_ports(True)
+    #instance.get_config_files(testbed, avalanche_test_name)
+    #force reserve Avlanche ports
+    instance.force_reserve_ports(True)
     # #set the Avalanche license file
-    # instance.set_license_file(license_file)
+    instance.set_license_file(license_file)
     # #set the Avalanche results output directory
-    # instance.set_output_dir()
+    instance.set_output_dir()
     # #set the Avalanche associations to run for a given test
-    # instance.set_associations(association_list)
+    instance.set_associations(association_list)
     # #set the RampUp rampTime
-    # instance.set_runtime(time_ramp_up, param="RampUp")
+    instance.set_runtime(time_ramp_up, param="RampUp")
     # #set the Steady State steadyTime
-    # instance.set_runtime(time_steady)
+    instance.set_runtime(time_steady)
     # #set the RampDown rampTime
-    # instance.set_runtime(time_ramp_down, param="RampDown")
+    instance.set_runtime(time_ramp_down, param="RampDown")
     # #example setting RampUp rampTime for a set of loads
-    # instance.set_runtime(time_ramp_up, param="RampUp", loads=loads)
+    # #instance.set_runtime(time_ramp_up, param="RampUp", loads=loads)
     # #example setting Steady State steadyTime for a set of loads
-    # instance.set_runtime_runtime(time_steady, loads=loads)
+    # #instance.set_runtime_runtime(time_steady, loads=loads)
     # #example setting RampDown rampTime for a set of loads
-    # instance.set_runtime(time_ramp_down, param="RampDown")
-    # #start the test
-    # instance.start()
-    #analysis
+    # #instance.set_runtime(time_ramp_down, param="RampDown", loads=loads)
+
+    ############START############
+    #start the test
+    instance.start(True)
+
+    ###########ANALYSIS##########
     #get list of client result directories - multiple cores
-    instance.get_directories(output_dir)
+    #filenames = instance.get_directories()
+    #for now, just open up the hostStats.csv and print each line
+    #instance.get_results_and_post_to_db(filenames)
+
+
+    #############################
+    #NOTES
+    #############################
+    """
+    -For the associations and loads, it would be nice to grab a count when the regex finds a match
+    or find a way to verify that the user defined associations and loads actually exist in the config.tcl
+    file.  If so great, else can throw in some logging with a warning indicating that association or load
+    was not found in the config file
+    -Might see if can poll C:\ProgramData\Spirent\Avalanche 4.42\user\jnmcclai\workspaces\.tempxxx...results\..
+    to poll some of the stats realtime (success/fails)
+    """
