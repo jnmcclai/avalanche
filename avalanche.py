@@ -294,10 +294,12 @@ class Avalanche():
             #create a temporary file
             fh, temp_file = mkstemp()
 
-            #initialize vlan list
+            #initialize vlan lists
             vlan_list = list()
+            vlan_list_pairs = list()
 
             #open the hostStats.csv file in each directory to retrieve data
+            #open the hostStats.csv file in each directory to retrieve list of VLANs
             with open(temp_file, 'w') as new_file:
                 with open(client_results) as old_file:
                     for line in old_file:
@@ -315,12 +317,49 @@ class Avalanche():
                         else:
                             pass
                             # new_file.write(line)
+
             #close and move file                    
             os.close(fh) 
-            #shutil.move(temp_file, filename)
-
+            
             #printing list for sanity
-            print vlan_list
+            #print vlan_list
+
+            #get a list of VLAN pairs - [[1,2], [2,3], [3,4], ... [n,m], [m, m+1]]
+            for n in range(len(vlan_list)):
+                try:
+                    vlan_list_pairs.append([vlan_list[n], vlan_list[n+1]])
+                except:
+                    #handle if run into an odd number of VLANs 
+                    vlan_list_pairs.append([vlan_list[n], "NULL"])
+
+            #printing vlan pair list for sanity
+            # print len(vlan_list)
+            # print vlan_list_pairs
+
+            #grab a block of data from the Avalanche client results file contained within a set of VLANs
+            # with open(temp_file, 'r') as new_file:
+            #     #reading the file into memory here (probably will do this once above when grabbing vlans)
+            #     file_contents = new_file.read()
+
+            for vlan_pair in vlan_list_pairs:
+                #get start and stop VLAN
+                vlan_start = vlan_pair[0]
+                vlan_stop = vlan_pair[1]
+
+            #open the hostStats.csv file in each directory to retrieve data within block of VLANs
+            with open(client_results, 'r') as old_file:
+                    #read the Avalanche client results file into memory
+                    file_contents = old_file.read()
+                    #get block of data between VLANs for each VLAN pair
+            block = re.findall("VLAN,{0}(.*?)VLAN,{1}".format(vlan_start, vlan_stop), file_contents, re.DOTALL|re.MULTILINE)
+            print block
+                        
+            #grab a block of data between VLANs (use regexp)
+            #then grab info from db (SELECT * FROM `Vlan_Slot_Pon_Mapping` WHERE `TestBed` like "[param node]" and `Vlan` like "$startVlan1")
+            #grab bytes resceived - regex
+            #grab goodput cumulative received - regex
+            #grab goodput avg received rate (bps) - regex
+            #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");)
 
     def analyze_goodput(self):
         """
@@ -691,4 +730,31 @@ if __name__ == '__main__':
     was not found in the config file
     -Might see if can poll C:\ProgramData\Spirent\Avalanche 4.42\user\jnmcclai\workspaces\.tempxxx...results\..
     to poll some of the stats realtime (success/fails)
+
+
+    >>> var = "VLAN,1801\nthis is some text\nhere is some more\nVLAN,1801"
+    >>> print var
+    VLAN,1801
+    this is some text
+    here is some more
+    VLAN,1801
+    >>>
+    >>>
+    >>> import re
+    >>> var = "VLAN,1801\nthis is some text\nhere is some more\nVLAN,1802"
+    >>>
+    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.S)
+    >>> print r
+    ['\nthis is some text\nhere is some more\n']
+
+    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.MULTILINE)
+    >>> print r
+    []
+    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.DOTALL|re.MULTILINE)
+    >>> print r
+    ['\nthis is some text\nhere is some more\n']
+
+    probably worth reading the client results into memory as it is not changing (unless realtime analysis)
+    and allow 
+
     """
