@@ -317,7 +317,7 @@ class Avalanche():
                             # new_file.write(line)
             #close and move file                    
             os.close(fh) 
-            shutil.move(temp_file, filename)
+            #shutil.move(temp_file, filename)
 
             #printing list for sanity
             print vlan_list
