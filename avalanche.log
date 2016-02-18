@@ -1,10 +1,1 @@
-2016-02-18 07:56:17,786 [FILE.INFO]: config.tcl; ReserveForce: True
-2016-02-18 07:56:17,799 [FILE.INFO]: config.tcl; License: C100_Lic
-2016-02-18 07:56:17,811 [FILE.INFO]: config.tcl; Result Output Directory: C:/AvalancheExeDir
-2016-02-18 07:56:17,871 [FILE.INFO]: config.tcl; Associations enabled: ['OctalOLT_Node1_Slot3', 'OctalOLT_Node1_Slot4']
-2016-02-18 07:56:17,871 [FILE.INFO]: config.tcl; load config; RampUp; Time: 10
-2016-02-18 07:56:17,892 [FILE.INFO]: config.tcl; load config; SteadyState; Time: 300
-2016-02-18 07:56:17,920 [FILE.INFO]: config.tcl; load config; RampDown; Time: 15
-2016-02-18 07:56:17,940 [FILE.INFO]: config.tcl; Trial Mode: True
-2016-02-18 07:56:17,951 [FILE.INFO]: Directory changed C:/AvalancheExeDir
-2016-02-18 07:56:17,951 [AVALANCHE]: Starting Avalanche test...
+2016-02-18 09:40:59,811 [AVALANCHE.RESULTS]: C:/AvalancheExeDir/results; Client Directories: ['client-subtest_0_core0', 'client-subtest_0_core1']

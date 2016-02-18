@@ -294,19 +294,33 @@ class Avalanche():
             #create a temporary file
             fh, temp_file = mkstemp()
 
+            #initialize vlan list
+            vlan_list = list()
+
             #open the hostStats.csv file in each directory to retrieve data
             with open(temp_file, 'w') as new_file:
                 with open(client_results) as old_file:
                     for line in old_file:
-                        print line
-                        # if re.search('ReserveForce\s+\d', line):
-                        #     new_file.write(re.sub('\d', str(reserve_force_bit), line))
-                        #     logging.info("[FILE.INFO]: {0}; ReserveForce: {1}".format(self.avalanche_config_filename, force_reserve))
-                        # else:
-                        #     new_file.write(line)
+                        #print line
+                        #get full list of VLANs
+                        if re.search('VLAN,\d+', line):
+                            #print line
+                            #strip the newline character
+                            vlan = line.strip()
+                            #just grab the VLAN value
+                            vlan = vlan.split(",")[1]
+                            vlan_list.append(vlan)
+                            # new_file.write(re.sub('\d', str(reserve_force_bit), line))
+                            # logging.info("[FILE.INFO]: {0}; ReserveForce: {1}".format(self.avalanche_config_filename, force_reserve))
+                        else:
+                            pass
+                            # new_file.write(line)
             #close and move file                    
             os.close(fh) 
             shutil.move(temp_file, filename)
+
+            #printing list for sanity
+            print vlan_list
 
     def analyze_goodput(self):
         """
@@ -626,29 +640,29 @@ if __name__ == '__main__':
     association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
     loads = ["erpsClientLoadProfile_Node1", "Default"]
     time_ramp_up = '10'
-    time_steady = '300'
+    time_steady = '120'
     time_ramp_down = '15'
 
     #initiate Avalanche instance
     instance = Avalanche()
 
     ########MODIFY_CONFIG########
-    #copy Avlanche test and license files
-    #instance.get_config_files(testbed, avalanche_test_name)
-    #force reserve Avlanche ports
-    instance.force_reserve_ports(True)
-    # #set the Avalanche license file
-    instance.set_license_file(license_file)
-    # #set the Avalanche results output directory
-    instance.set_output_dir()
-    # #set the Avalanche associations to run for a given test
-    instance.set_associations(association_list)
-    # #set the RampUp rampTime
-    instance.set_runtime(time_ramp_up, param="RampUp")
-    # #set the Steady State steadyTime
-    instance.set_runtime(time_steady)
-    # #set the RampDown rampTime
-    instance.set_runtime(time_ramp_down, param="RampDown")
+    # #copy Avlanche test and license files
+    # #instance.get_config_files(testbed, avalanche_test_name)
+    # #force reserve Avlanche ports
+    # instance.force_reserve_ports(True)
+    # # #set the Avalanche license file
+    # instance.set_license_file(license_file)
+    # # #set the Avalanche results output directory
+    # instance.set_output_dir()
+    # # #set the Avalanche associations to run for a given test
+    # instance.set_associations(association_list)
+    # # #set the RampUp rampTime
+    # instance.set_runtime(time_ramp_up, param="RampUp")
+    # # #set the Steady State steadyTime
+    # instance.set_runtime(time_steady)
+    # # #set the RampDown rampTime
+    # instance.set_runtime(time_ramp_down, param="RampDown")
     # #example setting RampUp rampTime for a set of loads
     # #instance.set_runtime(time_ramp_up, param="RampUp", loads=loads)
     # #example setting Steady State steadyTime for a set of loads
@@ -657,14 +671,14 @@ if __name__ == '__main__':
     # #instance.set_runtime(time_ramp_down, param="RampDown", loads=loads)
 
     ############START############
-    #start the test
-    instance.start(True)
+    # #start the test
+    # instance.start(True)
 
     ###########ANALYSIS##########
     #get list of client result directories - multiple cores
-    #filenames = instance.get_directories()
+    filenames = instance.get_directories()
     #for now, just open up the hostStats.csv and print each line
-    #instance.get_results_and_post_to_db(filenames)
+    instance.get_results_and_post_to_db(filenames)
 
 
     #############################
