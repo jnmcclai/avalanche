@@ -11,7 +11,7 @@ import os
 import re
 import shutil
 from tempfile import mkstemp
-#import database
+import database
 
 
 #define some logging
@@ -25,7 +25,7 @@ class Avalanche():
     args = {
                 avalanche_path: filepath to work with Avalanche config files
                 avalanche_config_filename: Avalanche config.tcl test filename
-
+                output_dir: the Avalanche results output directory
             }
 
     Class assumes TCL config file has already been built out 
@@ -39,6 +39,7 @@ class Avalanche():
         self.avalanche_config_filename = avalanche_config_filename
         self.avalanche_abs_config_file = self.avalanche_path + "\\" + self.avalanche_config_filename
         self.output_dir = output_dir
+        self.testbed = testbed
 
     def start(self, trial_mode=False):
         """
@@ -172,9 +173,6 @@ class Avalanche():
         #define file
         config_file = self.avalanche_abs_config_file
 
-        #create a temporary file
-        fh, temp_file = mkstemp()
-
         #intialize the enable_trial_bit
         if enable_trial_mode:
             enable_trial_bit = '1'
@@ -263,24 +261,44 @@ class Avalanche():
             #log list of associations to be deleted
             logging.info("[FILE.INFO]: config.tcl; Associations enabled: {0}".format(associations))
 
-    def get_results_and_post_to_db(self, dir_list, output_dir=None):
+    def get_results_and_post_to_db(self, testbed, dir_list, my_subnet="10.213.*", output_dir=None, db_ip="10.21.1.181", db_port=3306, db_database="pqGeneral"):
         """
         Retrieve the Avalanche generated results from the client side hostStats.csv files and publish to database
 
         args = {
+                    testbed: the test bed name - used for database queries (Generally the TID but may vary) - (e.g. 'FTTP-NODE-1' or 'PQ2E-NODE1_S16')
                     dir_list: list of Avalanche generated client result directories containing hostStats.csv files (e.g. client-subtest_0_core1)
-
+                    my_subnet: the users subnet (10.213.*) - this is used to filter down some more giving a desired line to extract result stats
+                    output_dir: the location where the Avalanche results files live (e.g. C:/AvalancheExeDir) this + '/results' + dir_list gives desired path containing hostStats.csv
+                    db_ip: the database server IP address
+                    db_port: the database server port (3306)
+                    db_database: the database to select
                 }
 
-        #for each client hostStats.csv Avalanche results file open up that file
-        #parse through that file looking for valid VLANs (pairs)
-        #exctract 
-        -"Bytes Received"
-        -"Goodput[Http] Cumulative Receive"
-        -"Goodput[Http] Ave Receive Rate (bps)"
-        #publish these results and other test run properties to a database 
-        #these results can then be pulled down and manipulated to test goodput, fairness, etc
+        Open up each client side Avalanche results hostStats.csv file.
+        Parse through the file and grab a list of VLANs.
+        Create a list of VLAN pairs.
+        Extract data from the files that lives in between the VLAN pairs.
+        Connect to database and get VLAN mapping
+        Get the below:
+            -"Bytes Received"
+            -"Goodput[Http] Cumulative Receive"
+            -"Goodput[Http] Ave Receive Rate (bps)"
+        Publish these results and other test run properties to a database 
+        These results can then be pulled down and manipulated to test goodput, fairness, etc
+
+        Connects to MySQLdb using the custom database module - this assumes the user has pre-built out data in the database
+
         """
+        #intialize database variables
+        db_username = "pqgen"
+        db_pwd = "pqgen"
+        db_table_vlan_mapping = "Vlan_Slot_Pon_Mapping"
+        db = database.Database(db_ip, db_port, db_database, db_username, db_pwd)
+
+        #connect to database
+        db.db_connect()
+        
         #set output_dir - allow user to set the directory or just use the one initialized with the class.  Also tack on '/results' to give something like "C:/AvalancheExeDir/results"
         if output_dir:
             results_dir = output_dir + "/results"
@@ -291,40 +309,30 @@ class Avalanche():
             #build the absolute path to hostStats.csv file
             client_results = results_dir + "/" + filename + "/hostStats.csv"
 
-            #create a temporary file
-            fh, temp_file = mkstemp()
-
             #initialize vlan lists
             vlan_list = list()
             vlan_list_pairs = list()
 
-            #open the hostStats.csv file in each directory to retrieve data
-            #open the hostStats.csv file in each directory to retrieve list of VLANs
-            with open(temp_file, 'w') as new_file:
-                with open(client_results) as old_file:
-                    for line in old_file:
+            #open the hostStats.csv file in each directory to retrieve data within blocks of VLANs
+            #client_results_file = open(client_results, 'r')
+            with open(client_results, 'r') as client_results_file:
+                #retrieve a list of VLANs
+                for line in client_results_file:
+                    #get full list of VLANs
+                    if re.search('VLAN,\d+', line):
                         #print line
-                        #get full list of VLANs
-                        if re.search('VLAN,\d+', line):
-                            #print line
-                            #strip the newline character
-                            vlan = line.strip()
-                            #just grab the VLAN value
-                            vlan = vlan.split(",")[1]
-                            vlan_list.append(vlan)
-                            # new_file.write(re.sub('\d', str(reserve_force_bit), line))
-                            # logging.info("[FILE.INFO]: {0}; ReserveForce: {1}".format(self.avalanche_config_filename, force_reserve))
-                        else:
-                            pass
-                            # new_file.write(line)
-
-            #close and move file                    
-            os.close(fh) 
-            
+                        #strip the newline character
+                        vlan = line.strip()
+                        #just grab the VLAN value
+                        vlan = vlan.split(",")[1]
+                        vlan_list.append(vlan)
+                    else:
+                        pass
+       
             #printing list for sanity
             #print vlan_list
 
-            #get a list of VLAN pairs - [[1,2], [2,3], [3,4], ... [n,m], [m, m+1]]
+            #get a list of VLAN pairs ~ [[1,2], [2,3], [3,4], ... [n,m], [m, m+1]]
             for n in range(len(vlan_list)):
                 try:
                     vlan_list_pairs.append([vlan_list[n], vlan_list[n+1]])
@@ -332,34 +340,45 @@ class Avalanche():
                     #handle if run into an odd number of VLANs 
                     vlan_list_pairs.append([vlan_list[n], "NULL"])
 
-            #printing vlan pair list for sanity
+            # #printing vlan pair list for sanity
             # print len(vlan_list)
             # print vlan_list_pairs
 
-            #grab a block of data from the Avalanche client results file contained within a set of VLANs
-            # with open(temp_file, 'r') as new_file:
-            #     #reading the file into memory here (probably will do this once above when grabbing vlans)
-            #     file_contents = new_file.read()
+
+            #read the Avalanche client results file into memory - may not need to open file twice
+            client_results_file = open(client_results, 'r')
+            file_contents = client_results_file.read()
 
             for vlan_pair in vlan_list_pairs:
+
                 #get start and stop VLAN
                 vlan_start = vlan_pair[0]
                 vlan_stop = vlan_pair[1]
 
-            #open the hostStats.csv file in each directory to retrieve data within block of VLANs
-            with open(client_results, 'r') as old_file:
-                    #read the Avalanche client results file into memory
-                    file_contents = old_file.read()
-                    #get block of data between VLANs for each VLAN pair
-            block = re.findall("VLAN,{0}(.*?)VLAN,{1}".format(vlan_start, vlan_stop), file_contents, re.DOTALL|re.MULTILINE)
-            print block
-                        
-            #grab a block of data between VLANs (use regexp)
-            #then grab info from db (SELECT * FROM `Vlan_Slot_Pon_Mapping` WHERE `TestBed` like "[param node]" and `Vlan` like "$startVlan1")
-            #grab bytes resceived - regex
-            #grab goodput cumulative received - regex
-            #grab goodput avg received rate (bps) - regex
-            #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");)
+                #get block of data between VLANs for each VLAN pair
+                vlan_block = re.findall("VLAN,{0}(.*?)VLAN,{1}".format(vlan_start, vlan_stop), file_contents, re.DOTALL|re.MULTILINE)
+                print vlan_block
+                
+                #get block of data within the vlan_block that runs from my_subnet (10.213*) out to ,255.255.255.255*
+                #subnet_block = re.findall
+                #then grab info from db (SELECT * FROM `Vlan_Slot_Pon_Mapping` WHERE `TestBed` like "[param node]" and `Vlan` like "$startVlan1") - SEPARATE METHOD
+                #query MySQLdb to get slot, pon, port, etc information to map against VLANs
+
+                sql_vlan_map_query = "SELECT * FROM {0} WHERE `TestBed` like '{1}' AND `Vlan` LIKE {2}".format(db_table_vlan_mapping, testbed, vlan_start)
+                #print out sql db response - again for sanity
+                #print sql_vlan_map_query
+                query_response = db.db_pull(sql_vlan_map_query)
+                #print "Row count: " + query_response[0]
+                #print query_response[1]
+
+                #sift down to just get a block within a block containing users subnet 10.213.*
+                #grab bytes resceived - regex
+                #grab goodput cumulative received - regex
+                #grab goodput avg received rate (bps) - regex
+                #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");)
+
+        #close database
+        db.db_close()
 
     def analyze_goodput(self):
         """
@@ -675,6 +694,7 @@ if __name__ == '__main__':
     license_file = "C100_Lic"
     output_dir = "C:/AvalancheExeDir"
     testbed = "ERPS"
+    testbed_db = "PQ2E-NODE1_S3"
     avalanche_test_name = "ERPS_NODE1-NODE_1"
     association_list = ["OctalOLT_Node1_Slot3", "OctalOLT_Node1_Slot4"]
     loads = ["erpsClientLoadProfile_Node1", "Default"]
@@ -711,13 +731,13 @@ if __name__ == '__main__':
 
     ############START############
     # #start the test
-    # instance.start(True)
+    instance.start(True)
 
     ###########ANALYSIS##########
     #get list of client result directories - multiple cores
     filenames = instance.get_directories()
     #for now, just open up the hostStats.csv and print each line
-    instance.get_results_and_post_to_db(filenames)
+    instance.get_results_and_post_to_db(testbed_db, filenames)
 
 
     #############################
