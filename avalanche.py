@@ -261,7 +261,7 @@ class Avalanche():
             #log list of associations to be deleted
             logging.info("[FILE.INFO]: config.tcl; Associations enabled: {0}".format(associations))
 
-    def get_results_and_post_to_db(self, testbed, dir_list, my_subnet="10.213.*", output_dir=None, db_ip="10.21.1.181", db_port=3306, db_database="pqGeneral"):
+    def get_results_and_post_to_db(self, testbed, dir_list, my_subnet="10.213.", output_dir=None, db_ip="10.21.1.181", db_port=3306, db_database="pqGeneral"):
         """
         Retrieve the Avalanche generated results from the client side hostStats.csv files and publish to database
 
@@ -290,11 +290,17 @@ class Avalanche():
         Connects to MySQLdb using the custom database module - this assumes the user has pre-built out data in the database
 
         """
-        #intialize database variables
+        #db initialize variables
         db_username = "pqgen"
         db_pwd = "pqgen"
+        #db pull variables
         db_table_vlan_mapping = "Vlan_Slot_Pon_Mapping"
         db = database.Database(db_ip, db_port, db_database, db_username, db_pwd)
+        #db push variables
+        db_avalanche_test_results = "trafficResults"
+        db_table_avalanche_test_results = "Avalanche_Test_Results"
+        sql_fields = "(`id`, `testRun`, `testName`, `vlan`, `vlan2`, `slot`, `pon`, `port`, `bytesReceived`, `goodPutCumRcv`, `goodputAvgRcvRate`, `timestamp`)"
+        sql_insert = "INSERT INTO `{0}`.`{1}` {2} VALUES".format(db_avalanche_test_results, db_table_avalanche_test_results, sql_fields)
 
         #connect to database
         db.db_connect()
@@ -310,8 +316,10 @@ class Avalanche():
             client_results = results_dir + "/" + filename + "/hostStats.csv"
 
             #initialize vlan lists
-            vlan_list = list()
-            vlan_list_pairs = list()
+            vlan_list_outer = list()
+            vlan_list_inner = list()
+            vlan_list_pairs_outer = list()
+            vlan_list_pairs_inner = list()
 
             #open the hostStats.csv file in each directory to retrieve data within blocks of VLANs
             #client_results_file = open(client_results, 'r')
@@ -324,8 +332,15 @@ class Avalanche():
                         #strip the newline character
                         vlan = line.strip()
                         #just grab the VLAN value
-                        vlan = vlan.split(",")[1]
-                        vlan_list.append(vlan)
+                        vlan_outer = vlan.split(",")[1].split("/")[0]
+                        #also going back to grab the inner VLAN
+                        try:
+                            vlan_inner = vlan.split(",")[1].split("/")[1]
+                        except:
+                            vlan_inner = "NULL"
+                        vlan_list_outer.append(vlan_outer)
+                        vlan_list_inner.append(vlan_inner)
+                    
                     else:
                         pass
        
@@ -333,15 +348,17 @@ class Avalanche():
             #print vlan_list
 
             #get a list of VLAN pairs ~ [[1,2], [2,3], [3,4], ... [n,m], [m, m+1]]
-            for n in range(len(vlan_list)):
+            for n in range(len(vlan_list_outer)):
                 try:
-                    vlan_list_pairs.append([vlan_list[n], vlan_list[n+1]])
+                    vlan_list_pairs_outer.append([vlan_list_outer[n], vlan_list_outer[n+1]])
+                    vlan_list_pairs_inner.append([vlan_list_inner[n], vlan_list_inner[n+1]])
                 except:
-                    #handle if run into an odd number of VLANs 
-                    vlan_list_pairs.append([vlan_list[n], "NULL"])
+                    #handle if run into an unique number of VLANs 
+                    vlan_list_pairs_outer.append([vlan_list_outer[n], "NULL"])
+                    vlan_list_pairs_inner.append([vlan_list_inner[n], "NULL"])
 
             # #printing vlan pair list for sanity
-            # print len(vlan_list)
+            # print len(vlan_list_outer)
             # print vlan_list_pairs
 
 
@@ -349,33 +366,74 @@ class Avalanche():
             client_results_file = open(client_results, 'r')
             file_contents = client_results_file.read()
 
-            for vlan_pair in vlan_list_pairs:
+            #temp_count = 0
+            #print my_subnet
+            for vlan_pair_outer, vlan_pair_inner in zip(vlan_list_pairs_outer, vlan_list_pairs_inner):
 
                 #get start and stop VLAN
-                vlan_start = vlan_pair[0]
-                vlan_stop = vlan_pair[1]
+                vlan_start_outer = vlan_pair_outer[0]
+                vlan_stop_outer = vlan_pair_outer[1]
+                #get this for inner VLAN if exists
+                vlan_start_inner = vlan_pair_inner[0]
 
                 #get block of data between VLANs for each VLAN pair
-                vlan_block = re.findall("VLAN,{0}(.*?)VLAN,{1}".format(vlan_start, vlan_stop), file_contents, re.DOTALL|re.MULTILINE)
-                print vlan_block
+                vlan_block = re.findall("VLAN,{0}(.*?)VLAN,{1}".format(vlan_start_outer, vlan_stop_outer), file_contents, re.DOTALL|re.MULTILINE)
+                #print vlan_block
+                #break
                 
-                #get block of data within the vlan_block that runs from my_subnet (10.213*) out to ,255.255.255.255*
-                #subnet_block = re.findall
-                #then grab info from db (SELECT * FROM `Vlan_Slot_Pon_Mapping` WHERE `TestBed` like "[param node]" and `Vlan` like "$startVlan1") - SEPARATE METHOD
-                #query MySQLdb to get slot, pon, port, etc information to map against VLANs
+                #check to see if my_subnet is found in the VLAN block, if so, pull VLAN mapping from db, else skip to the next pair
+            
+                #still may want to sift down to just get the data block minux the headers
+                for element in vlan_block:
+                    if my_subnet in element:
+                        #print vlan_block
+                        #temp_count += 1
+                        #determine valid VLANs
+                        start_vlan_01 = vlan_start_outer
+                        start_vlan_02 = vlan_start_inner
+                        print start_vlan_01
+                        # print start_vlan_02
+                        #perform VLAN mapping db retrieval for the corresponding VLANs
+                        if start_vlan_02 == "NULL":
+                            sql_vlan_map_query = "SELECT * FROM {0} WHERE `TestBed` like '{1}' AND `Vlan` LIKE {2}".format(db_table_vlan_mapping, testbed, start_vlan_01)
+                            #print sql_vlan_map_query
+                        else:
+                            sql_vlan_map_query = "SELECT * FROM {0} WHERE `TestBed` like '{1}' AND `Vlan` LIKE {2} AND `vlan2` LIKE {3}".format(db_table_vlan_mapping, testbed, start_vlan_01, start_vlan_02)
+                            #print sql_vlan_map_query
 
-                sql_vlan_map_query = "SELECT * FROM {0} WHERE `TestBed` like '{1}' AND `Vlan` LIKE {2}".format(db_table_vlan_mapping, testbed, vlan_start)
-                #print out sql db response - again for sanity
-                #print sql_vlan_map_query
-                query_response = db.db_pull(sql_vlan_map_query)
-                #print "Row count: " + query_response[0]
-                #print query_response[1]
+                        #get the row count and query response
+                        query_response = db.db_pull(sql_vlan_map_query)
+                        #print "Row count: " + query_response[0]
+                        #print "SQL Response: " + query_response[1]
+                        if query_response[1]:
+                            sql_response = query_response[1][0]
+                            #print sql_response
+                        else:
+                            logging.warning("[DB.WARNING]: ENTRY NOT FOUND; {0}".format(sql_vlan_map_query))
 
-                #sift down to just get a block within a block containing users subnet 10.213.*
-                #grab bytes resceived - regex
-                #grab goodput cumulative received - regex
-                #grab goodput avg received rate (bps) - regex
-                #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");)
+                        #query SQL response to extract slot, pon, port, etc
+                        slot = sql_response[3]
+                        pon = sql_response[4]
+                        port = sql_response[9]
+                        
+
+                        #grab the statistics - bytes received, goodput cumulative received, goodput avg received rate (bps)
+                        vlan_block_list = vlan_block[0].split(",")
+                        base = 712 * 2
+                        bytes_received = vlan_block_list[base + 9]
+                        goodput_cum_received = vlan_block_list[base + 249]
+                        goodput_avg_received_rate = vlan_block_list[base + 250]
+
+                        #printing results for sanity
+                        print "bytes received: " + bytes_received
+                        print "goodput cumulative received: " + goodput_cum_received
+                        print "goodput avg received rate (bps): " + goodput_avg_received_rate
+
+                        #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");
+
+                    else:
+                        #my_subnet not found in block
+                        pass
 
         #close database
         db.db_close()
@@ -731,7 +789,7 @@ if __name__ == '__main__':
 
     ############START############
     # #start the test
-    instance.start(True)
+    # instance.start(True)
 
     ###########ANALYSIS##########
     #get list of client result directories - multiple cores
