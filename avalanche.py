@@ -12,7 +12,8 @@ import re
 import shutil
 from tempfile import mkstemp
 import database
-
+import socket
+from datetime import datetime
 
 #define some logging
 log_file = __file__.split('.')[0].split('/')[-1] + '.log'
@@ -40,6 +41,10 @@ class Avalanche():
         self.avalanche_abs_config_file = self.avalanche_path + "\\" + self.avalanche_config_filename
         self.output_dir = output_dir
         self.testbed = testbed
+        self.hostname = socket.gethostbyaddr(socket.gethostname())[0].split(".")[0].upper()
+        self.date_time = datetime.now().strftime('%Y%m%d%H%M%S')
+        self.test_run = self.hostname + self.date_time
+        self.time_stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     def start(self, trial_mode=False):
         """
@@ -261,13 +266,14 @@ class Avalanche():
             #log list of associations to be deleted
             logging.info("[FILE.INFO]: config.tcl; Associations enabled: {0}".format(associations))
 
-    def get_results_and_post_to_db(self, testbed, dir_list, my_subnet="10.213.", output_dir=None, db_ip="10.21.1.181", db_port=3306, db_database="pqGeneral"):
+    def get_results_and_post_to_db(self, testbed, dir_list, avalanche_test_name, my_subnet="10.213.", output_dir=None, db_ip="10.21.1.181", db_port=3306, db_database="pqGeneral"):
         """
         Retrieve the Avalanche generated results from the client side hostStats.csv files and publish to database
 
         args = {
                     testbed: the test bed name - used for database queries (Generally the TID but may vary) - (e.g. 'FTTP-NODE-1' or 'PQ2E-NODE1_S16')
                     dir_list: list of Avalanche generated client result directories containing hostStats.csv files (e.g. client-subtest_0_core1)
+                    avalanche_test_name: the Avalanche test name (e.g. SM040_CSLAG-4_Data_Verification-Avalanche)
                     my_subnet: the users subnet (10.213.*) - this is used to filter down some more giving a desired line to extract result stats
                     output_dir: the location where the Avalanche results files live (e.g. C:/AvalancheExeDir) this + '/results' + dir_list gives desired path containing hostStats.csv
                     db_ip: the database server IP address
@@ -287,23 +293,25 @@ class Avalanche():
         Publish these results and other test run properties to a database 
         These results can then be pulled down and manipulated to test goodput, fairness, etc
 
-        Connects to MySQLdb using the custom database module - this assumes the user has pre-built out data in the database
+        Connects to MySQLdb using the custom database module - this assumes the user has pre-built vlan mappings in the database
 
         """
         #db initialize variables
         db_username = "pqgen"
         db_pwd = "pqgen"
-        #db pull variables
+        #db vlan map pull variables
         db_table_vlan_mapping = "Vlan_Slot_Pon_Mapping"
-        db = database.Database(db_ip, db_port, db_database, db_username, db_pwd)
-        #db push variables
+        db_vlan_map = database.Database(db_ip, db_port, db_database, db_username, db_pwd)
+        #db traffic push variables
+        db_database_traffic = "trafficResults" #static for now
+        db_traffic = database.Database(db_ip, db_port, db_database_traffic, db_username, db_pwd)
         db_avalanche_test_results = "trafficResults"
         db_table_avalanche_test_results = "Avalanche_Test_Results"
         sql_fields = "(`id`, `testRun`, `testName`, `vlan`, `vlan2`, `slot`, `pon`, `port`, `bytesReceived`, `goodPutCumRcv`, `goodputAvgRcvRate`, `timestamp`)"
-        sql_insert = "INSERT INTO `{0}`.`{1}` {2} VALUES".format(db_avalanche_test_results, db_table_avalanche_test_results, sql_fields)
 
         #connect to database
-        db.db_connect()
+        db_vlan_map.db_connect()
+        db_traffic.db_connect()
         
         #set output_dir - allow user to set the directory or just use the one initialized with the class.  Also tack on '/results' to give something like "C:/AvalancheExeDir/results"
         if output_dir:
@@ -383,7 +391,7 @@ class Avalanche():
                 
                 #check to see if my_subnet is found in the VLAN block, if so, pull VLAN mapping from db, else skip to the next pair
             
-                #still may want to sift down to just get the data block minux the headers
+                #still may want to sift down to just get the data block minus the headers
                 for element in vlan_block:
                     if my_subnet in element:
                         #print vlan_block
@@ -391,7 +399,7 @@ class Avalanche():
                         #determine valid VLANs
                         start_vlan_01 = vlan_start_outer
                         start_vlan_02 = vlan_start_inner
-                        print start_vlan_01
+                        # print start_vlan_01
                         # print start_vlan_02
                         #perform VLAN mapping db retrieval for the corresponding VLANs
                         if start_vlan_02 == "NULL":
@@ -402,7 +410,7 @@ class Avalanche():
                             #print sql_vlan_map_query
 
                         #get the row count and query response
-                        query_response = db.db_pull(sql_vlan_map_query)
+                        query_response = db_vlan_map.db_pull(sql_vlan_map_query)
                         #print "Row count: " + query_response[0]
                         #print "SQL Response: " + query_response[1]
                         if query_response[1]:
@@ -425,23 +433,135 @@ class Avalanche():
                         goodput_avg_received_rate = vlan_block_list[base + 250]
 
                         #printing results for sanity
-                        print "bytes received: " + bytes_received
-                        print "goodput cumulative received: " + goodput_cum_received
-                        print "goodput avg received rate (bps): " + goodput_avg_received_rate
+                        # print "bytes received: " + bytes_received
+                        # print "goodput cumulative received: " + goodput_cum_received
+                        # print "goodput avg received rate (bps): " + goodput_avg_received_rate
 
-                        #publish results to db ($insertCommand ("0","$testRun","$testCaseName","$startVlan1","0","$slotNum","$ponNum","$bytesRcvd","$gPutCumRcv","$gPutAvgRcvRate","$timeStamp");
+                        #check if inner tag is defined for publishing to results db -----> figure out what to do with port 'None'/Null val
+                        if start_vlan_02 == "NULL":
+                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, '0', str(slot), str(pon), str(port), '1', '1', '1', self.time_stamp) 
+
+                        else:
+                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, start_vlan_02, str(slot), pon, port, bytes_received, goodput_cum_received, goodput_avg_received_rate, self.time_stamp) 
+
+                        #publish data to db
+                        sql_query_push = "INSERT INTO `{0}`.`{1}` {2} VALUES {3}".format(db_avalanche_test_results, db_table_avalanche_test_results, sql_fields, values)
+                        logging.info("[DB.INFO]: DB PUBLISH; VALUES: {0}".format(values))
+                        db_traffic.db_push(sql_query_push)
 
                     else:
                         #my_subnet not found in block
                         pass
 
         #close database
-        db.db_close()
+        db_vlan_map.db_close()
+        db_traffic.db_close()
 
-    def analyze_goodput(self):
+    def analyze_goodput(self, avalanche_test_name, mode="", slot="", pon="", summary_txt_file_path="C:/AvalancheExeDir/Summary_Results.txt", overwrite=True):
         """
         Analzye the Avalanche test results goodput
+
+        args = {
+                    avalanche_test_name: the Avalanche test name (e.g. SM040_CSLAG-4_Data_Verification-Avalanche) - really probably should be a class variable
+                    mode: this is a string designator that aids in indicating what data to fetch from the db where the results live (default: uses run id, test name, slot, pon) - if use something else, need to define it (e.g. slot then need to define the slot). options: [SM|SLOT]
+                    summary_txt_file_path: location to generate the summary results text file (e.g. C:/AvalancheExeDir)
+                    min_goodput: threshold value for the minimum acceptable goodput rate (e.g. 0.85)
+                    overwrite: if True overwrite the Summary_Results.txt file; else, append
+                }
+
+        #fetch results from db
+        #perform calculations to get pass/fail values and return/print out/log this information
+        #build out summary results text file
+        #publish the results of the calculations to db
+
+
+        Calculations:
+        goodPutCumRcv/Bytes Received (Mbps) - return value as is and as a percent and report pass/fail msg with threshold %
+        if throughput < 0 need to notify and throw some fail msgs/logs
+        "you've recently achieved saint hood and are now entering a flux in which your throughput values are > 100 % - consult your physician"
         """
+
+        ##########################
+        #WRITING SUMMARY FILE
+        ##########################
+        """
+
+        In the middle, there was retVal + vlanMsg
+            retVal = "" initially
+            then, retVal = retVal + vlanMsg where vlanMsg is something like: 
+                -"OK: Goodput for vlan [query testResults vlan($i)] is $thruputMB (KB) or [format %.2f [expr $value * 100]]$percent which is greater than or equal to [expr $minGoodput * 100]$percent"
+                -"Error: Goodput for vlan [query testResults vlan($i)] is $thruputMB (KB) or [format %.2f [expr $value * 100]]$percent which is less than [expr $minGoodput * 100]$percent"
+                -"Info: No Goodput for VLAN [query testResults vlan($i)]"   ---> indicates throughput results were < 0 all of them
+
+        """
+
+        #db initialize variables - this needs to be more global/encrypted
+        db_ip = "10.21.1.181"
+        db_port = 3306
+        db_username = "pqgen"
+        db_pwd = "pqgen"
+        #db Avalanche result pull variables
+        db_database_traffic = "trafficResults"
+        db_table_avalanche_test_results = "Avalanche_Test_Results"
+        db_traffic = database.Database(db_ip, db_port, db_database_traffic, db_username, db_pwd)
+
+        #connect to db
+        db_traffic.db_connect()
+
+        #fetch results from db based on a 'mode'
+        if mode.lower() == "sm":
+            #fetch with test_run id and avalanche_test_name
+            sql_query = "SELECT * FROM `Avalanche_Test_Results` WHERE `testRun` LIKE '{0}' AND `testName` LIKE '{1}' ORDER BY `vlan`".format(self.test_run, avalanche_test_name)
+        elif mode.lower() == "slot":
+            #fetch with test_run id, avalanche_test_name, and slot
+            sql_query = "SELECT * FROM `Avalanche_Test_Results` WHERE `testRun` LIKE '{0}' AND `testName` LIKE '{1}' AND `slot` LIKE '{2}' ORDER BY `vlan`".format(self.test_run, avalanche_test_name, str(slot))
+        else:
+        #fetch with test_run id, avalanche_test_name, slot, and pon
+            sql_query = "SELECT * FROM `Avalanche_Test_Results` WHERE `testRun` LIKE '{0}' AND `testName` LIKE '{1}' AND `slot` LIKE '{2}' AND `pon` LIKE '{3}' ORDER BY `vlan`".format(self.test_run, avalanche_test_name, str(slot), str(pon))
+
+        #pull the results and verify you get some - if no results found then raise an assertion and throw log msg
+        logging.info("[DB.RESULTS]: SQL QUERY: {0}".format(sql_query))
+
+        #fetch the data
+        query_response = db_traffic.db_pull(sql_query)
+        row_count = query_response[0]
+
+        #throw an error if no data is retrived from the database
+        #print "Row count: " + query_response[0]
+        if row_count == 0:
+            logging.warning("[DB.RESULTS]: db: {0}; db_table: {1} - No Avalanche test results records retrieved from using SQL query {2}".format(db_database_traffic, db_table_avalanche_test_results, sql_query))
+            AssertionError("[DB.RESULTS]: db: {0}; db_table: {1} - No Avalanche test results records retrieved from using SQL query {2}".format(db_database_traffic, db_table_avalanche_test_results, sql_query))
+        #print "SQL Response: " + str(query_response[1])
+
+
+        #now loop over each row of data
+        #for row in row_count:
+
+            #do some math to get desired values
+            #print out pass/fail criteria with info (or just fail) and write to the file or create lists with pass/fail criteria and loop over it and then write it all at the end
+
+        #define config file
+        my_summary_file = summary_txt_file_path
+
+        if overwrite:
+            #then set open options to 'w'
+            summary_options = 'w'
+        else:
+            #then set open options to 'a'
+            summary_options = 'a'
+        
+
+        #build out Avalanche summary results txt file
+        with open(my_summary_file, summary_options) as summary_file:
+            summary_file.write("##################### Analysis of Avalanche Good Put results per VLAN ######################\n")
+            for i in range(0, 10):
+                summary_file.write("hello {0}\n".format(i))
+            summary_file.write("##################### Analysis of Avalanche Good Put results per VLAN Completed #############\n")
+
+        #close db session
+        db_traffic.db_connect()
+
+
     def analyze_fairness(self):
         """
         Analyze the Avalanche test results fairness
@@ -771,7 +891,7 @@ if __name__ == '__main__':
     # # #set the Avalanche license file
     # instance.set_license_file(license_file)
     # # #set the Avalanche results output directory
-    # instance.set_output_dir()
+    # instance.set_output_dir(output_dir)
     # # #set the Avalanche associations to run for a given test
     # instance.set_associations(association_list)
     # # #set the RampUp rampTime
@@ -792,11 +912,11 @@ if __name__ == '__main__':
     # instance.start(True)
 
     ###########ANALYSIS##########
-    #get list of client result directories - multiple cores
-    filenames = instance.get_directories()
-    #for now, just open up the hostStats.csv and print each line
-    instance.get_results_and_post_to_db(testbed_db, filenames)
-
+    # get list of client result directories - multiple cores
+    # filenames = instance.get_directories()
+    #open up the hostStats.csv within the client dirs, filter, get data, post to db
+    # instance.get_results_and_post_to_db(testbed_db, filenames, avalanche_test_name)
+    instance.analyze_goodput(avalanche_test_name, mode="slot", slot=3)
 
     #############################
     #NOTES
@@ -808,31 +928,5 @@ if __name__ == '__main__':
     was not found in the config file
     -Might see if can poll C:\ProgramData\Spirent\Avalanche 4.42\user\jnmcclai\workspaces\.tempxxx...results\..
     to poll some of the stats realtime (success/fails)
-
-
-    >>> var = "VLAN,1801\nthis is some text\nhere is some more\nVLAN,1801"
-    >>> print var
-    VLAN,1801
-    this is some text
-    here is some more
-    VLAN,1801
-    >>>
-    >>>
-    >>> import re
-    >>> var = "VLAN,1801\nthis is some text\nhere is some more\nVLAN,1802"
-    >>>
-    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.S)
-    >>> print r
-    ['\nthis is some text\nhere is some more\n']
-
-    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.MULTILINE)
-    >>> print r
-    []
-    >>> r = re.findall('VLAN,1801(.*?)VLAN,1802', var, re.DOTALL|re.MULTILINE)
-    >>> print r
-    ['\nthis is some text\nhere is some more\n']
-
-    probably worth reading the client results into memory as it is not changing (unless realtime analysis)
-    and allow 
 
     """

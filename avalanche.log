@@ -1,3 +1,1 @@
-2016-03-10 17:15:40,961 [AVALANCHE.RESULTS]: C:/AvalancheExeDir/results; Client Directories: ['client-subtest_0_core0', 'client-subtest_0_core1']
-2016-03-10 17:15:44,586 [DB.WARNING]: ENTRY NOT FOUND; SELECT * FROM Vlan_Slot_Pon_Mapping WHERE `TestBed` like 'PQ2E-NODE1_S3' AND `Vlan` LIKE 2225
-2016-03-10 17:15:49,947 [DB.WARNING]: ENTRY NOT FOUND; SELECT * FROM Vlan_Slot_Pon_Mapping WHERE `TestBed` like 'PQ2E-NODE1_S3' AND `Vlan` LIKE 2229
+2016-03-18 16:44:19,720 [DB.RESULTS]: SQL QUERY: SELECT * FROM `Avalanche_Test_Results` WHERE `testRun` LIKE 'JNMCCLAIHPW720160318164419' AND `testName` LIKE 'ERPS_NODE1-NODE_1' AND `slot` LIKE '3' ORDER BY `vlan`
