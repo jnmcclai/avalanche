@@ -439,10 +439,10 @@ class Avalanche():
 
                         #check if inner tag is defined for publishing to results db -----> figure out what to do with port 'None'/Null val
                         if start_vlan_02 == "NULL":
-                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, '0', str(slot), str(pon), str(port), '1', '1', '1', self.time_stamp) 
+                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, '0', str(slot), str(pon), str(port), bytes_received, goodput_cum_received, goodput_avg_received_rate, self.time_stamp) 
 
                         else:
-                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, start_vlan_02, str(slot), pon, port, bytes_received, goodput_cum_received, goodput_avg_received_rate, self.time_stamp) 
+                            values = ('0', self.test_run, avalanche_test_name, start_vlan_01, start_vlan_02, str(slot), str(pon), str(port), bytes_received, goodput_cum_received, goodput_avg_received_rate, self.time_stamp) 
 
                         #publish data to db
                         sql_query_push = "INSERT INTO `{0}`.`{1}` {2} VALUES {3}".format(db_avalanche_test_results, db_table_avalanche_test_results, sql_fields, values)
@@ -533,11 +533,30 @@ class Avalanche():
             AssertionError("[DB.RESULTS]: db: {0}; db_table: {1} - No Avalanche test results records retrieved from using SQL query {2}".format(db_database_traffic, db_table_avalanche_test_results, sql_query))
         #print "SQL Response: " + str(query_response[1])
 
-
+        output = list(query_response[1])
+        #print output
         #now loop over each row of data
-        #for row in row_count:
+        for row in output:
 
-            #do some math to get desired values
+            #do some math to get desired values in Mbps
+            #print row
+            bytes_received = row[8] * 8.0 #Mbps
+            goodput_cum_received = row[9]
+            goodput_avg_received_rate = row[10]
+            test_name = row[2]
+            outer_vlan = row[3]
+            inner_vlan = row[4]
+
+            goodput =  round((goodput_cum_received / bytes_received), 2) #percent
+
+            
+            print "Percent goodput: " + str(goodput) + "%"
+            print "bytes received: " + str(bytes_received)
+            print "goodput_cum_received: " +  str(goodput_cum_received)
+            print "goodput_avg_received_rate: " + str(goodput_avg_received_rate)
+            print "testName: " + str(test_name)
+            print "outer vlan: " + str(outer_vlan)
+            print "inner vlan: " + str(inner_vlan)
             #print out pass/fail criteria with info (or just fail) and write to the file or create lists with pass/fail criteria and loop over it and then write it all at the end
 
         #define config file
@@ -909,13 +928,16 @@ if __name__ == '__main__':
 
     ############START############
     # #start the test
-    # instance.start(True)
+    #instance.start()
 
     ###########ANALYSIS##########
     # get list of client result directories - multiple cores
-    # filenames = instance.get_directories()
+    #filenames = instance.get_directories()
     #open up the hostStats.csv within the client dirs, filter, get data, post to db
-    # instance.get_results_and_post_to_db(testbed_db, filenames, avalanche_test_name)
+    #instance.get_results_and_post_to_db(testbed_db, filenames, avalanche_test_name)
+    #modding this for dev:
+    instance.get_results_and_post_to_db(testbed_db, ['client-subtest_0_core1'], avalanche_test_name)
+    #could allow pass in primary key id value for test run
     instance.analyze_goodput(avalanche_test_name, mode="slot", slot=3)
 
     #############################
