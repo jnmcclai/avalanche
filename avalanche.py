@@ -457,7 +457,7 @@ class Avalanche():
         db_vlan_map.db_close()
         db_traffic.db_close()
 
-    def analyze_goodput(self, avalanche_test_name, mode="", slot="", pon="", summary_txt_file_path="C:/AvalancheExeDir/Summary_Results.txt", overwrite=True):
+    def analyze_goodput(self, avalanche_test_name, min_goodput=0.85, mode="", slot="", pon="", summary_txt_file_path="C:/AvalancheExeDir/Summary_Results.txt", overwrite=True):
         """
         Analzye the Avalanche test results goodput
 
@@ -534,47 +534,65 @@ class Avalanche():
         #print "SQL Response: " + str(query_response[1])
 
         output = list(query_response[1])
+        min_goodput = min_goodput * 100
         #print output
-        #now loop over each row of data
-        for row in output:
-
-            #do some math to get desired values in Mbps
-            #print row
-            bytes_received = row[8] * 8.0 #Mbps
-            goodput_cum_received = row[9]
-            goodput_avg_received_rate = row[10]
-            test_name = row[2]
-            outer_vlan = row[3]
-            inner_vlan = row[4]
-
-            goodput =  round((goodput_cum_received / bytes_received), 2) #percent
-
-            
-            print "Percent goodput: " + str(goodput) + "%"
-            print "bytes received: " + str(bytes_received)
-            print "goodput_cum_received: " +  str(goodput_cum_received)
-            print "goodput_avg_received_rate: " + str(goodput_avg_received_rate)
-            print "testName: " + str(test_name)
-            print "outer vlan: " + str(outer_vlan)
-            print "inner vlan: " + str(inner_vlan)
-            #print out pass/fail criteria with info (or just fail) and write to the file or create lists with pass/fail criteria and loop over it and then write it all at the end
-
-        #define config file
-        my_summary_file = summary_txt_file_path
-
-        if overwrite:
-            #then set open options to 'w'
-            summary_options = 'w'
-        else:
-            #then set open options to 'a'
-            summary_options = 'a'
         
-
-        #build out Avalanche summary results txt file
+         #build out Avalanche summary results txt file
         with open(my_summary_file, summary_options) as summary_file:
+            #write Summary_Results.txt header
             summary_file.write("##################### Analysis of Avalanche Good Put results per VLAN ######################\n")
-            for i in range(0, 10):
-                summary_file.write("hello {0}\n".format(i))
+
+            #now loop over each row of data
+            for row in output:
+
+                #do some math to get desired values in Mbps
+                #print row
+                bytes_received = row[8] * 8.0 #Mbps
+                goodput_cum_received = row[9]
+                goodput_avg_received_rate = row[10]
+                test_name = row[2]
+                outer_vlan = row[3]
+                inner_vlan = row[4]
+
+                
+                goodput =  round((goodput_cum_received / bytes_received) * 100, 2) #percent
+                
+
+                # print "min goodput: " + str(min_goodput)
+                # print "Percent goodput: " + str(goodput) + "%"
+                # print "bytes received: " + str(bytes_received)
+                # print "goodput_cum_received: " +  str(goodput_cum_received)
+                # print "goodput_avg_received_rate: " + str(goodput_avg_received_rate)
+                # print "testName: " + str(test_name)
+                # print "outer vlan: " + str(outer_vlan)
+                # print "inner vlan: " + str(inner_vlan)
+
+                #print out pass/fail criteria with info (or just fail) and write to the file or create lists with pass/fail criteria and loop over it and then write it all at the end
+                if goodput >= min_goodput:
+                    #then we passed, not going to print anything but will log the throughput in Summary_Results.txt file
+                    if inner_vlan == 0:
+                        summary_output = "[PASS] VLAN: {0} - Percent Goodput: {1}%; Expected Percent Goodput: {2}%".format(outer_vlan, goodput, min_goodput)
+                    else:
+                        summary_output = "[PASS] VLAN: {0}/{1} - Percent Goodput: {2}%; Expected Percent Goodput: {3}%".format(outer_vlan, inner_vlan, goodput, min_goodput)
+                else:
+                    #we failed, print/log failures
+                    if inner_vlan == 0:
+                        summary_output = "[FAIL] VLAN: {0} - Percent Goodput: {1}%; Expected Percent Goodput: {2}%".format(outer_vlan, goodput, min_goodput)
+                    else:
+                        summary_output = "[FAIL] VLAN: {0}/{1} - Percent Goodput: {2}%; Expected Percent Goodput: {3}%".format(outer_vlan, inner_vlan, goodput, min_goodput)
+                print summary_output
+
+            #define config file
+            my_summary_file = summary_txt_file_path
+
+            if overwrite:
+                #then set open options to 'w'
+                summary_options = 'w'
+            else:
+                #then set open options to 'a'
+                summary_options = 'a'
+            
+            #write Summary_Results.txt footer
             summary_file.write("##################### Analysis of Avalanche Good Put results per VLAN Completed #############\n")
 
         #close db session
@@ -906,7 +924,7 @@ if __name__ == '__main__':
     # #copy Avlanche test and license files
     # #instance.get_config_files(testbed, avalanche_test_name)
     # #force reserve Avlanche ports
-    # instance.force_reserve_ports(True)
+    instance.force_reserve_ports(True)
     # # #set the Avalanche license file
     # instance.set_license_file(license_file)
     # # #set the Avalanche results output directory
@@ -928,15 +946,15 @@ if __name__ == '__main__':
 
     ############START############
     # #start the test
-    #instance.start()
+    instance.start()
 
     ###########ANALYSIS##########
     # get list of client result directories - multiple cores
-    #filenames = instance.get_directories()
+    filenames = instance.get_directories()
     #open up the hostStats.csv within the client dirs, filter, get data, post to db
-    #instance.get_results_and_post_to_db(testbed_db, filenames, avalanche_test_name)
+    instance.get_results_and_post_to_db(testbed_db, filenames, avalanche_test_name)
     #modding this for dev:
-    instance.get_results_and_post_to_db(testbed_db, ['client-subtest_0_core1'], avalanche_test_name)
+    #instance.get_results_and_post_to_db(testbed_db, ['client-subtest_0_core1'], avalanche_test_name)
     #could allow pass in primary key id value for test run
     instance.analyze_goodput(avalanche_test_name, mode="slot", slot=3)
 
